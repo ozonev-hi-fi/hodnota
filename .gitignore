@@ -1,1 +1,7 @@
 CLAUDE.local.md
+
+# .NET
+bin/
+obj/
+.vs/
+*.user
