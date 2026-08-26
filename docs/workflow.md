@@ -4,13 +4,13 @@ Day-to-day cheat sheet for the branching/versioning policy decided in [decisions
 
 ## Starting a feature
 
-1. File (or pick) a GitHub Issue for the task — its number becomes `<issue#>` below.
-2. Branch off `develop`:
-   ```
-   git checkout develop
-   git pull
-   git checkout -b feature/<issue#>-<short-description>
-   ```
+Branch off `develop`:
+```
+git checkout develop
+git pull
+git checkout -b feature/<identifier>-<short-description>
+```
+`<identifier>` is the relevant ADR number when the task has one (e.g. `feature/0003-initial-architecture`); omit it if there's no ADR (e.g. `feature/fix-readme-typo`). No GitHub Issue is required to start a branch — see [decisions/0001](decisions/0001-branching-and-versioning-strategy.md).
 
 ## Finishing a feature
 
@@ -32,5 +32,5 @@ Once `develop` is in a release-worthy state:
 ## Rules of thumb
 
 - Nothing gets committed to `main` directly, other than the one-time docs bootstrap.
-- Branch names are always `feature/<issue#>-<short-description>` — the number is the GitHub Issue number.
+- Branch names are always `feature/<identifier>-<short-description>` — `<identifier>` is the relevant ADR number when one exists, otherwise omitted.
 - Claude does not run `git commit` / `git push` / PR-creation commands itself in this repo — see `CLAUDE.local.md`. It prints the commands; you run them.

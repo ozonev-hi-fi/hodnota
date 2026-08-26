@@ -4,9 +4,9 @@ Project-wide guidance for working on this repo. Local, sensitive, or not-for-pub
 
 ## Branch check — every task, no exceptions
 
-Before touching any file, run `git branch --show-current` (or check `git status`) and compare against the "Branching & Versioning Strategy" in [docs/architecture.md](docs/architecture.md) / [docs/workflow.md](docs/workflow.md). Work happens on a `feature/<issue#>-<short-description>` branch cut from `develop` — not directly on `develop` or `main` (the only exception is the one-time docs bootstrap that predates this rule).
+Before touching any file, run `git branch --show-current` (or check `git status`) and compare against the "Branching & Versioning Strategy" in [docs/architecture.md](docs/architecture.md) / [docs/workflow.md](docs/workflow.md). Work happens on a `feature/<identifier>-<short-description>` branch cut from `develop` — not directly on `develop` or `main` (the only exception is the one-time docs bootstrap that predates this rule). `<identifier>` is the relevant ADR number when the task has one, otherwise omitted — GitHub Issues are not required to start a branch, see [decisions/0001](docs/decisions/0001-branching-and-versioning-strategy.md).
 
-If the current branch isn't a feature branch: **stop before implementing.** File or pick a GitHub Issue, get its number from the user (issue creation is a shared/visible action — print the `gh issue create` command rather than running it), then create/checkout `feature/<issue#>-<short-description>` off `develop` and continue there. Re-check the branch again before ever proposing a commit command, in case something moved it in the meantime.
+If the current branch isn't a feature branch: **stop before implementing.** Create/checkout `feature/<identifier>-<short-description>` (or `feature/<short-description>` if there's no ADR) off `develop` and continue there. Re-check the branch again before ever proposing a commit command, in case something moved it in the meantime.
 
 ## Workflow: decision doc before implementation
 
@@ -19,4 +19,4 @@ For a task big enough to warrant its own [ADR](docs/decisions/README.md) — non
 5. **Review** — review the changes before anything is committed.
 6. **Commit** — developer (human) only action. Re-check the branch (see above) and suggest the best commit/push/PR commands for the user to run.
 
-Small/routine tasks skip the decision doc and go straight to a GitHub Issue, per [docs/roadmap.md](docs/roadmap.md) — this rule doesn't change that split, it only formalizes the order for the tasks that do cross the ADR bar. The branch check above applies regardless of which path a task takes.
+Small/routine tasks skip the decision doc and go straight to a branch, per [docs/roadmap.md](docs/roadmap.md) — this rule doesn't change that split, it only formalizes the order for the tasks that do cross the ADR bar. The branch check above applies regardless of which path a task takes.
