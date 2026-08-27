@@ -35,6 +35,8 @@ A persisted catalog of `Artist`/`Album`/`Track` entities plus `ProviderLink`s, b
 
 Latest-stable-everything version policy; `hodnota.slnx` at repo root with one central `Directory.Packages.props` for every .NET project; root `.editorconfig` + .NET analyzers for C#, Biome for the web app; xUnit/AwesomeAssertions/NSubstitute for unit tests, `WebApplicationFactory`+Testcontainers(PostgreSQL) for integration, Playwright for E2E once there's a UI to exercise. Web component/unit tests use Vitest + React Testing Library (decided in [decisions/0004](decisions/0004-scaffold-backend-and-web-app.md), since 0003 didn't cover a JS test framework). Full reasoning: [decisions/0003](decisions/0003-initial-architecture.md).
 
+**CI**: GitHub Actions, `.github/workflows/ci.yml` — parallel `backend` (restore/format/build/test) and `web` (install/check/test/build) jobs on every pull request. Advisory only for now, no required status checks. Reasoning: [decisions/0004](decisions/0004-scaffold-backend-and-web-app.md).
+
 ## Supported Streaming Services — First Release (priority order)
 
 1. YouTube + YouTube Music
@@ -72,7 +74,6 @@ Not strictly "architecture," but decided and settled, so it lives here rather th
 - Auth token strategy (cookie vs. JWT) for the SPA/mobile/third-party clients.
 - Mobile app auth approach for a native client.
 - Hosting provider/free-tier specifics not yet evaluated.
-- CI pipeline (build/test/lint on every PR).
 - Secrets/config management for provider API keys (depends on the hosting choice).
 - Structured logging/observability approach.
 - OpenAPI generation for typed clients.
