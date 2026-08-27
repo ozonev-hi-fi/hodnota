@@ -1,7 +1,16 @@
-name: CI
+name: CI Backend
 
 on:
   pull_request:
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "*.slnx"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
+      - "global.json"
+      - ".editorconfig"
+      - ".github/workflows/ci-backend.yml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -11,8 +20,8 @@ permissions:
   contents: read
 
 jobs:
-  backend:
-    name: Backend
+  checks:
+    name: Checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -28,26 +37,3 @@ jobs:
       - run: dotnet build --no-restore
 
       - run: dotnet test --no-build
-
-  web:
-    name: Web
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: web
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: web/.nvmrc
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-
-      - run: npm ci
-
-      - run: npm run check
-
-      - run: npm test
-
-      - run: npm run build

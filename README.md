@@ -1,6 +1,7 @@
 # hodnota
 
-[![CI](https://github.com/ozonev-hi-fi/hodnota/actions/workflows/ci.yml/badge.svg)](https://github.com/ozonev-hi-fi/hodnota/actions/workflows/ci.yml)
+[![CI Backend](https://github.com/ozonev-hi-fi/hodnota/actions/workflows/ci-backend.yml/badge.svg)](https://github.com/ozonev-hi-fi/hodnota/actions/workflows/ci-backend.yml)
+[![CI Web](https://github.com/ozonev-hi-fi/hodnota/actions/workflows/ci-web.yml/badge.svg)](https://github.com/ozonev-hi-fi/hodnota/actions/workflows/ci-web.yml)
 
 Link aggregation / music exchange service.
 
@@ -38,4 +39,4 @@ npm run check    # lint/format check (same check CI runs)
 
 ## CI
 
-Every pull request runs [`.github/workflows/ci.yml`](.github/workflows/ci.yml): the backend and web checks above, in parallel. See [decisions/0004](docs/decisions/0004-scaffold-backend-and-web-app.md) for the reasoning.
+Two independent workflows, each running only when a PR touches the paths it cares about: [`.github/workflows/ci-backend.yml`](.github/workflows/ci-backend.yml) (the backend checks above) and [`.github/workflows/ci-web.yml`](.github/workflows/ci-web.yml) (the web checks above). See [decisions/0004](docs/decisions/0004-scaffold-backend-and-web-app.md) for the reasoning.
