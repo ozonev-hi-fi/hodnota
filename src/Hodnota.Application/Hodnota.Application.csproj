@@ -1,0 +1,5 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\Hodnota.Domain\Hodnota.Domain.csproj" />
+  </ItemGroup>
+</Project>

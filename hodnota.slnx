@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Hodnota.Api/Hodnota.Api.csproj" />
+    <Project Path="src/Hodnota.Application/Hodnota.Application.csproj" />
+    <Project Path="src/Hodnota.Contracts/Hodnota.Contracts.csproj" />
+    <Project Path="src/Hodnota.Domain/Hodnota.Domain.csproj" />
+    <Project Path="src/Hodnota.Infrastructure/Hodnota.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Hodnota.Api.Tests/Hodnota.Api.Tests.csproj" />
+    <Project Path="tests/Hodnota.Application.Tests/Hodnota.Application.Tests.csproj" />
+    <Project Path="tests/Hodnota.Domain.Tests/Hodnota.Domain.Tests.csproj" />
+    <Project Path="tests/Hodnota.Infrastructure.Tests/Hodnota.Infrastructure.Tests.csproj" />
+  </Folder>
+</Solution>

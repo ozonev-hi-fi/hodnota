@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <ItemGroup>
+    <ProjectReference Include="..\Hodnota.Infrastructure\Hodnota.Infrastructure.csproj" />
+    <ProjectReference Include="..\Hodnota.Contracts\Hodnota.Contracts.csproj" />
+  </ItemGroup>
+</Project>

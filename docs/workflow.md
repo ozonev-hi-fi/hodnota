@@ -17,8 +17,9 @@ git checkout -b feature/<identifier>-<short-description>
 Only once it's fully done: DB/migration changes, business logic, and test coverage all in.
 
 1. Push the branch and open a PR into `develop`.
-2. Merge the PR into `develop` (squash or regular merge — no review gate required, this is a solo repo).
-3. Delete the feature branch (locally and on `origin`).
+2. Check CI: `gh pr checks <number>` (every PR that touches backend/web code runs the matching workflow(s) under `.github/workflows/` — see [decisions/0004](decisions/0004-scaffold-backend-and-web-app.md)). `gh pr view <number>` for the PR's general state/URL.
+3. Merge the PR into `develop` (squash or regular merge — no review gate required, this is a solo repo).
+4. Delete the feature branch (locally and on `origin`).
 
 ## Releasing
 
