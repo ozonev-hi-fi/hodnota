@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <title>hodnota</title>
+  <style>
+    path, ellipse { fill: #000; }
+    .ring { fill: none; stroke: #000; }
+    @media (prefers-color-scheme: dark) {
+      path, ellipse { fill: #fff; }
+      .ring { stroke: #fff; }
+    }
+  </style>
+  <path class="ring" d="M 60 63 A 23 23 0 1 1 44 34" stroke-width="14" stroke-linecap="round"/>
+  <path d="M 59 55 L 59 23 C 59 16, 63 11, 70 11 C 81 11, 91 20, 91 32 C 91 42, 85 50, 76 49 C 81 41, 79 30, 69 29 C 68 29, 68 29, 68 30 L 68 55 Z"/>
+  <ellipse cx="63" cy="60" rx="13" ry="11" transform="rotate(-15 63 60)"/>
+</svg>
