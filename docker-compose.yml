@@ -1,0 +1,15 @@
+# Reads ./.env automatically (Compose's implicit default) — see that file for why it's committed.
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - hodnota-postgres-data:/var/lib/postgresql
+
+volumes:
+  hodnota-postgres-data:
