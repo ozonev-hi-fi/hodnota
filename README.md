@@ -13,17 +13,36 @@ See [docs/MANIFESTO.md](docs/MANIFESTO.md) for the *why*, [docs/architecture.md]
 
 - [.NET SDK](https://dotnet.microsoft.com/download) — version pinned in [`global.json`](global.json).
 - [Node.js](https://nodejs.org/) — version pinned in [`web/.nvmrc`](web/.nvmrc). If you use [nvm](https://github.com/nvm-sh/nvm)/[nvm-windows](https://github.com/coreybutler/nvm-windows), see [web/README.md](web/README.md#node-version).
+- [Docker](https://www.docker.com/) (or another compatible engine, e.g. [Rancher Desktop](https://rancherdesktop.io/)) — for the local Postgres dev database ([decisions/0005](docs/decisions/0005-auth-identity.md)) and the Testcontainers-backed integration tests.
 
 ## Backend (`Hodnota.Api` + Clean Architecture solution)
 
 From the repo root:
 
 ```
+dotnet tool restore               # once, after cloning — installs dotnet-ef pinned in .config/dotnet-tools.json
+docker compose up -d              # start the local Postgres dev database (persists across restarts)
 dotnet build                      # build the whole solution
-dotnet test                       # run all .NET tests
-dotnet run --project src/Hodnota.Api   # run the API locally
+dotnet test                       # run all .NET tests (the Hodnota.Infrastructure.IntegrationTests project needs Docker)
+dotnet run --project src/Hodnota.Api   # run the API locally, against the local Postgres container
 dotnet format --verify-no-changes # check formatting (same check CI runs)
 ```
+
+### Environment configuration (`.env` / `.env.local`)
+
+The root [`.env`](.env) file is committed on purpose — it only holds non-secret local-dev Postgres credentials (localhost-only, never shipped anywhere), read by both `docker-compose.yml` and the API (via `Hodnota.Infrastructure.DotEnvLoader`), so the commands above need no manual configuration. See [decisions/0005](docs/decisions/0005-auth-identity.md).
+
+If you need to override a value locally (a port conflict, a personal API key later on), create a **gitignored** `.env.local` next to it with just the keys you want to change — it's loaded after `.env` and wins on conflicts. Nobody needs one today; it exists for when someone does.
+
+### Migrations
+
+```
+dotnet ef migrations add <Name> --project src/Hodnota.Infrastructure --startup-project src/Hodnota.Api -o Identity/Migrations   # add a migration
+dotnet ef database update --project src/Hodnota.Infrastructure --startup-project src/Hodnota.Api                                # apply pending migrations manually
+dotnet ef migrations remove --project src/Hodnota.Infrastructure --startup-project src/Hodnota.Api                              # undo the last, unapplied migration
+```
+
+`dotnet ef` needs the `dotnet-ef` tool from `dotnet tool restore` (above) and a real reachable Postgres — `docker compose up -d` first. `Hodnota.Api` also applies pending migrations automatically on startup (see `Program.cs`), so `dotnet ef database update` is only needed for inspecting/scripting migrations outside running the API.
 
 ## Web (`/web`, React + TypeScript)
 

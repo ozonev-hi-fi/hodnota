@@ -17,7 +17,7 @@ Each supported service (see list below) implements a shared `IStreamingProvider`
 
 ## Authentication & Authorization
 
-ASP.NET Core Identity (PostgreSQL-backed): email + password, Google, Facebook. Possibly Apple Sign-In later. Cookie-vs-JWT token strategy for the SPA/mobile/third-party clients is still open — see [decisions/0003](decisions/0003-initial-architecture.md).
+ASP.NET Core Identity: email + password is implemented (`Hodnota.Infrastructure.Identity`'s `ApplicationDbContext`/`ApplicationUser : IdentityUser<Guid>`, mounted via `MapIdentityApi<ApplicationUser>()` under `/api/auth`), bearer tokens for every client (SPA, future mobile, future third-party API) rather than cookies. Google, Facebook, and possibly Apple Sign-In later remain a separate, not-yet-implemented roadmap item. Email confirmation is disabled for v1 (a `NoOpEmailSender` logs links instead of sending them) until the "Integrate email service" roadmap item lands. Reasoning: [decisions/0005](decisions/0005-auth-identity.md).
 
 ## Hosting
 
@@ -25,7 +25,9 @@ Needs to be free (or effectively free) to start. Candidates to evaluate: contain
 
 ## Database
 
-EF Core. PostgreSQL in production, SQLite for local dev and fast tests. Schema-changing features need an integration-test pass against real PostgreSQL before merging (see [decisions/0003](decisions/0003-initial-architecture.md) for why SQLite alone isn't sufficient sign-off).
+EF Core. PostgreSQL in production **and for local interactive dev** — a `docker-compose.yml` at repo root runs a local Postgres container with a persistent named volume, so `dotnet run`ning the API locally gets a stable dataset and the same versioned migrations used in prod, rather than a separate SQLite schema story. SQLite is scoped to just the fast, Docker-free automated test suites (`Hodnota.Api.Tests`, `Hodnota.Infrastructure.Tests`), which configure it directly and use `Database.EnsureCreated()` rather than migrations. Schema-changing features additionally need an integration-test pass against real PostgreSQL before merging — via Testcontainers, in a dedicated `*.IntegrationTests` project, kept separate from the persistent local dev container (see [decisions/0005](decisions/0005-auth-identity.md), refining [decisions/0003](decisions/0003-initial-architecture.md) for why SQLite alone isn't sufficient sign-off).
+
+The root `.env` file is the single source of truth for the local dev Postgres credentials — intentionally committed (not a real secret: localhost-only, never shipped anywhere), consumed by both `docker-compose.yml` and `Hodnota.Api`/`dotnet-ef` (via `Hodnota.Infrastructure.DotEnvLoader`), so a fresh clone runs with zero manual setup. An optional, always-gitignored `.env.local` overrides it for a personal value. See [decisions/0005](decisions/0005-auth-identity.md).
 
 ## Data Model (rough)
 
@@ -34,6 +36,8 @@ A persisted catalog of `Artist`/`Album`/`Track` entities plus `ProviderLink`s, b
 ## Tooling & Conventions
 
 Latest-stable-everything version policy; `hodnota.slnx` at repo root with one central `Directory.Packages.props` for every .NET project; root `.editorconfig` + .NET analyzers for C#, Biome for the web app; xUnit/AwesomeAssertions/NSubstitute for unit tests, `WebApplicationFactory`+Testcontainers(PostgreSQL) for integration, Playwright for E2E once there's a UI to exercise. Web component/unit tests use Vitest + React Testing Library (decided in [decisions/0004](decisions/0004-scaffold-backend-and-web-app.md), since 0003 didn't cover a JS test framework). Full reasoning: [decisions/0003](decisions/0003-initial-architecture.md).
+
+**Config key/value literals**: a repeated config key (e.g. `"Database:Provider"`) or one of its possible values (e.g. `"Postgres"`/`"Sqlite"`) belongs in a `public static class` of `const string` fields, colocated with the code that owns that config (e.g. `Hodnota.Infrastructure.DatabaseConfiguration`), reused from every call site instead of re-typing the literal — introduced in [decisions/0005](decisions/0005-auth-identity.md). This is a general convention for future config keys too, not just the database ones; it doesn't apply to the config *files* themselves (`appsettings.json`, `.env`), which necessarily spell the key out as JSON/text.
 
 **CI**: GitHub Actions, two independent workflows each path-filtered to only run when relevant — `.github/workflows/ci-backend.yml` (restore/format/build/test) and `.github/workflows/ci-web.yml` (install/check/test/build) — on every pull request. Advisory only for now, no required status checks. Reasoning: [decisions/0004](decisions/0004-scaffold-backend-and-web-app.md).
 
@@ -68,11 +72,11 @@ Not strictly "architecture," but decided and settled, so it lives here rather th
 
 ## Open Questions
 
-- Detailed EF Core schema/migrations.
+- Detailed EF Core schema/migrations for the catalog (`Artist`/`Album`/`Track`/`SharePage`) — Identity's own schema is now settled, see [decisions/0005](decisions/0005-auth-identity.md).
 - Provider-specific auth and implementation details, per streaming service.
 - SPA build glue (Dockerfile or build script) to produce the single deployable artifact.
-- Auth token strategy (cookie vs. JWT) for the SPA/mobile/third-party clients.
-- Mobile app auth approach for a native client.
+- Mobile app's secure token storage and refresh-flow UX (the wire mechanism — bearer tokens against the shared `MapIdentityApi` endpoints — is decided, see [decisions/0005](decisions/0005-auth-identity.md)).
+- Real transactional email sending for Identity flows (confirmation/reset) — currently a logging no-op sender; tracked as its own roadmap item ("Integrate email service").
 - Hosting provider/free-tier specifics not yet evaluated.
 - Secrets/config management for provider API keys (depends on the hosting choice).
 - Structured logging/observability approach.

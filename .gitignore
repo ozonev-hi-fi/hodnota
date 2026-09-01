@@ -1,5 +1,7 @@
 CLAUDE.local.md
 
+.env.local
+
 # .NET
 bin/
 obj/

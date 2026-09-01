@@ -378,6 +378,14 @@ dotnet_naming_style.tpascalcase.word_separator =
 dotnet_naming_style.tpascalcase.capitalization = pascal_case
 
 dotnet_naming_style._camelcase.required_prefix = _
+
+# EF Core migrations are produced by `dotnet ef migrations add` and never hand-edited — regenerating would
+# just reintroduce whatever style the generator's templates emit (e.g. block-bodied single-statement
+# lambdas), so IDE style suggestions are suppressed for them rather than fought on every regeneration. This
+# does not affect real compile errors, only IDE/analyzer style suggestions. See
+# docs/decisions/0005-auth-identity.md.
+[src/**/Migrations/*.cs]
+generated_code = true
 dotnet_naming_style._camelcase.required_suffix =
 dotnet_naming_style._camelcase.word_separator =
 dotnet_naming_style._camelcase.capitalization = camel_case
