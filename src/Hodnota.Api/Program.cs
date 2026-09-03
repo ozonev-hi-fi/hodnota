@@ -1,13 +1,18 @@
+using Hodnota.Api.OpenApi;
 using Hodnota.Infrastructure;
 using Hodnota.Infrastructure.Identity;
 
 using Microsoft.EntityFrameworkCore;
 
+using Scalar.AspNetCore;
+
 DotEnvLoader.LoadIfPresent();
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddInfrastructure();
+builder.Services
+    .AddInfrastructure()
+    .AddDocumentation();
 
 var app = builder.Build();
 
@@ -26,6 +31,12 @@ await using (var scope = app.Services.CreateAsyncScope())
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+if (app.Environment.IsDevelopment())
+{
+    app.MapOpenApi();
+    app.MapScalarApiReference();
+}
 
 app.MapGroup("/api/auth").MapIdentityApi<ApplicationUser>();
 

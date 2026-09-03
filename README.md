@@ -44,6 +44,10 @@ dotnet ef migrations remove --project src/Hodnota.Infrastructure --startup-proje
 
 `dotnet ef` needs the `dotnet-ef` tool from `dotnet tool restore` (above) and a real reachable Postgres — `docker compose up -d` first. `Hodnota.Api` also applies pending migrations automatically on startup (see `Program.cs`), so `dotnet ef database update` is only needed for inspecting/scripting migrations outside running the API.
 
+### API docs
+
+While `dotnet run --project src/Hodnota.Api` is running, open [`http://localhost:5009/scalar/v1`](http://localhost:5009/scalar/v1) (or whatever port you passed via `--urls`) for an interactive, browsable reference of every endpoint — including a working "Authorize" button for the bearer tokens `/api/auth/login` issues. The raw OpenAPI document backing it is at `/openapi/v1.json`. Both are Development-only ([decisions/0006](docs/decisions/0006-openapi-scalar-dev-ui.md)) and won't respond at all (404) outside that environment.
+
 ## Web (`/web`, React + TypeScript)
 
 From `/web` (see [web/README.md](web/README.md) for the full rundown):
