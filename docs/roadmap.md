@@ -7,7 +7,7 @@ Epic-level plan, checked off as things get done. Task-level work doesn't belong 
 - [x] Design the detailed architecture of the first version (see [architecture.md](architecture.md)) — see [decisions/0003](decisions/0003-initial-architecture.md).
 - [x] Scaffold the backend solution (Clean Architecture projects) and the `/web` React app — see [decisions/0004](decisions/0004-scaffold-backend-and-web-app.md).
 - [x] Implement auth (Identity) — email + password via ASP.NET Core Identity, bearer tokens, PostgreSQL (prod and local dev container) — see [decisions/0005](decisions/0005-auth-identity.md).
-- [ ] Add OpenAPI generation + a dev-only interactive API UI (Scalar or similar, gated to Development, not shipped to prod) — general tooling for every endpoint from here on, not specific to any one feature, so it lands before the items that benefit from it rather than bundled into one of them.
+- [x] Add OpenAPI generation + a dev-only interactive API UI (Scalar or similar, gated to Development, not shipped to prod) — see [decisions/0006](decisions/0006-openapi-scalar-dev-ui.md).
 - [ ] Implement the catalog data model + EF Core migrations (Postgres/SQLite)
 - [ ] Implement auth UI (Web) — register/login screens against the Identity API
 - [ ] Implement a first streaming provider end-to-end as a walking skeleton

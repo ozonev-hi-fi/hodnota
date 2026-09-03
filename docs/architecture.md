@@ -41,6 +41,8 @@ Latest-stable-everything version policy; `hodnota.slnx` at repo root with one ce
 
 **CI**: GitHub Actions, two independent workflows each path-filtered to only run when relevant — `.github/workflows/ci-backend.yml` (restore/format/build/test) and `.github/workflows/ci-web.yml` (install/check/test/build) — on every pull request. Advisory only for now, no required status checks. Reasoning: [decisions/0004](decisions/0004-scaffold-backend-and-web-app.md).
 
+**API documentation**: the built-in `Microsoft.AspNetCore.OpenApi` generator produces the OpenAPI document (`/openapi/v1.json`) for every minimal-API endpoint, with a `Scalar.AspNetCore`-served interactive UI at `/scalar/v1` on top of it. Both are mapped only when `app.Environment.IsDevelopment()` — never reachable in Production. Reasoning: [decisions/0006](decisions/0006-openapi-scalar-dev-ui.md).
+
 ## Supported Streaming Services — First Release (priority order)
 
 1. YouTube + YouTube Music
@@ -80,6 +82,6 @@ Not strictly "architecture," but decided and settled, so it lives here rather th
 - Hosting provider/free-tier specifics not yet evaluated.
 - Secrets/config management for provider API keys (depends on the hosting choice).
 - Structured logging/observability approach.
-- OpenAPI generation for typed clients.
+- Typed client generation for `/web` from the OpenAPI document (the document itself and a dev-only UI are now settled, see [decisions/0006](decisions/0006-openapi-scalar-dev-ui.md)).
 - Dev container/Docker setup for onboarding consistency.
 - i18n tooling for the manifesto's localization goal.
