@@ -37,7 +37,7 @@ If you need to override a value locally (a port conflict, a personal API key lat
 ### Migrations
 
 ```
-dotnet ef migrations add <Name> --project src/Hodnota.Infrastructure --startup-project src/Hodnota.Api -o Identity/Migrations   # add a migration
+dotnet ef migrations add <Name> --project src/Hodnota.Infrastructure --startup-project src/Hodnota.Api -o Migrations            # add a migration
 dotnet ef database update --project src/Hodnota.Infrastructure --startup-project src/Hodnota.Api                                # apply pending migrations manually
 dotnet ef migrations remove --project src/Hodnota.Infrastructure --startup-project src/Hodnota.Api                              # undo the last, unapplied migration
 ```

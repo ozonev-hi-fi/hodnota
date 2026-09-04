@@ -20,3 +20,9 @@ For a task big enough to warrant its own [ADR](docs/decisions/README.md) — non
 6. **Commit** — developer (human) only action. Re-check the branch (see above) and suggest the best commit/push/PR commands for the user to run.
 
 Small/routine tasks skip the decision doc and go straight to a branch, per [docs/roadmap.md](docs/roadmap.md) — this rule doesn't change that split, it only formalizes the order for the tasks that do cross the ADR bar. The branch check above applies regardless of which path a task takes.
+
+## Code comments: don't duplicate the ADR
+
+Every feature big enough to need a decision doc ships with one, permanently linkable from the PR. That changes the bar for an inline comment: don't restate a design decision, its rationale, or its rejected alternatives in code when the ADR already covers it — link to the ADR from the PR/commit, not from a comment, and trust a reader to open it. This is on top of the general "why, not what" comment rule: no comment that's obvious from the code, the tests, or the relevant ADR.
+
+Property/column meaning that isn't obvious from its name (what a field represents, not why it's shaped that way) is documentation, not a design-decision comment — prefer a `[Description("...")]` attribute on the member over a `//` comment for that, so it stays attached to the type for any future self-documentation/reflection use, not just readers of the source file.

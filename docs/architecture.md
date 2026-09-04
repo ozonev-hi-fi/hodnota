@@ -29,15 +29,25 @@ EF Core. PostgreSQL in production **and for local interactive dev** — a `docke
 
 The root `.env` file is the single source of truth for the local dev Postgres credentials — intentionally committed (not a real secret: localhost-only, never shipped anywhere), consumed by both `docker-compose.yml` and `Hodnota.Api`/`dotnet-ef` (via `Hodnota.Infrastructure.DotEnvLoader`), so a fresh clone runs with zero manual setup. An optional, always-gitignored `.env.local` overrides it for a personal value. See [decisions/0005](decisions/0005-auth-identity.md).
 
-## Data Model (rough)
+## Data Model
 
-A persisted catalog of `Artist`/`Album`/`Track` entities plus `ProviderLink`s, built up as a side effect of the searches needed to construct sharing pages — intended to be reusable by future, unrelated projects (a "Music Wikipedia"). `SharePage` references a catalog entity and carries its own filtered/ordered list of provider links. Detailed schema is implementation-time work.
+A persisted catalog of `Artist`/`Release`/`Track` entities plus `ProviderLink`s, built up as a side effect of the searches needed to construct sharing pages — intended to be reusable by future, unrelated projects (a "Music Wikipedia"). `SharePage` (not yet built) will reference a catalog entity and carry its own filtered/ordered list of provider links.
+
+- **`Artist`/`Release`/`Track`**: `Release` generalizes Album/EP/Single/Compilation/Live behind one `ReleaseType`. A `Track` can appear on more than one `Release` (original album, later compilation, reissue) via the `ReleaseTrack` junction — not a one-to-many FK — since the same recording is identified across releases by `Isrc` (`Release.Upc` plays the same natural-key role). Multi-artist attribution is a normalized `ArtistCredit` join (`Role`: `MainArtist`/`Featured`/`Producer`/`Composer`/`Remixer`), with a database-enforced partial unique index guaranteeing at most one `MainArtist` credit per `Release`/`Track`.
+- **`Platform`**: a dynamic, DB-managed catalog dimension (seeded with the supported-services list below) that a `ProviderLink` points to — distinct from, and refining, the `IStreamingProvider` code abstraction above, which remains the mechanism for actively searching/resolving a service's API. `Platform` lets the catalog carry links to services with no automated integration yet. Retiring a platform sets `IsActive = false` rather than deleting the row — `ProviderLink.PlatformId` is `Restrict`, so existing links are never silently lost.
+- **`ProviderLink`**, `EntityGenre` (a `Genre` tag on an `Artist`/`Release`/`Track`): both are polymorphic over the same three catalog entity types, using nullable FK columns plus a DB CHECK constraint (exactly one target set) rather than a loose `entity_type`/`entity_id` pair, and three partial unique indexes per target type rather than one composite index (standard SQL NULL semantics would let a composite index silently miss real duplicates).
+- Every primary entity (`Artist`, `Release`, `Track`, `Platform`, `Genre`, `RecordLabel`, `ProviderLink`) carries `CreatedAtUtc`/`UpdatedAtUtc`, populated by a `TimestampsInterceptor` (`SaveChangesInterceptor`) via an injected `TimeProvider`. URL properties are `Uri`, not `string`; every `DateTimeOffset` in the model (including Identity's own) is normalized to UTC by a model-wide converter registered in `ApplicationDbContext.ConfigureConventions`.
+- Deferred: `SharePage`, repository interfaces in `Hodnota.Application`, `Artist.Biography`/localized description text, `Track.Lyrics`, JSONB/flexible metadata columns, local/blob image storage.
+
+Full reasoning: [decisions/0007](decisions/0007-catalog-data-model.md).
 
 ## Tooling & Conventions
 
 Latest-stable-everything version policy; `hodnota.slnx` at repo root with one central `Directory.Packages.props` for every .NET project; root `.editorconfig` + .NET analyzers for C#, Biome for the web app; xUnit/AwesomeAssertions/NSubstitute for unit tests, `WebApplicationFactory`+Testcontainers(PostgreSQL) for integration, Playwright for E2E once there's a UI to exercise. Web component/unit tests use Vitest + React Testing Library (decided in [decisions/0004](decisions/0004-scaffold-backend-and-web-app.md), since 0003 didn't cover a JS test framework). Full reasoning: [decisions/0003](decisions/0003-initial-architecture.md).
 
 **Config key/value literals**: a repeated config key (e.g. `"Database:Provider"`) or one of its possible values (e.g. `"Postgres"`/`"Sqlite"`) belongs in a `public static class` of `const string` fields, colocated with the code that owns that config (e.g. `Hodnota.Infrastructure.DatabaseConfiguration`), reused from every call site instead of re-typing the literal — introduced in [decisions/0005](decisions/0005-auth-identity.md). This is a general convention for future config keys too, not just the database ones; it doesn't apply to the config *files* themselves (`appsettings.json`, `.env`), which necessarily spell the key out as JSON/text.
+
+**Property/column meaning**: when a property's name doesn't fully convey its meaning, document it with a `[Description("...")]` attribute (`System.ComponentModel`) rather than a comment, so the explanation stays attached to the member for future reflection-based use — introduced in [decisions/0007](decisions/0007-catalog-data-model.md). Comments that would just restate a decision already covered by its ADR are avoided entirely — see [CLAUDE.md](../CLAUDE.md).
 
 **CI**: GitHub Actions, two independent workflows each path-filtered to only run when relevant — `.github/workflows/ci-backend.yml` (restore/format/build/test) and `.github/workflows/ci-web.yml` (install/check/test/build) — on every pull request. Advisory only for now, no required status checks. Reasoning: [decisions/0004](decisions/0004-scaffold-backend-and-web-app.md).
 
@@ -74,7 +84,7 @@ Not strictly "architecture," but decided and settled, so it lives here rather th
 
 ## Open Questions
 
-- Detailed EF Core schema/migrations for the catalog (`Artist`/`Album`/`Track`/`SharePage`) — Identity's own schema is now settled, see [decisions/0005](decisions/0005-auth-identity.md).
+- `SharePage`'s schema — deferred until "Implement a first streaming provider end-to-end as a walking skeleton" actually starts, see [decisions/0007](decisions/0007-catalog-data-model.md).
 - Provider-specific auth and implementation details, per streaming service.
 - SPA build glue (Dockerfile or build script) to produce the single deployable artifact.
 - Mobile app's secure token storage and refresh-flow UX (the wire mechanism — bearer tokens against the shared `MapIdentityApi` endpoints — is decided, see [decisions/0005](decisions/0005-auth-identity.md)).

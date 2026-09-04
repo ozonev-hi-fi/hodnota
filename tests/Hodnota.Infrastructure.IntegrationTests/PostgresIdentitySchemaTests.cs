@@ -12,7 +12,7 @@ namespace Hodnota.Infrastructure.IntegrationTests;
 public class PostgresIdentitySchemaTests(PostgresContainerFixture fixture) : IClassFixture<PostgresContainerFixture>
 {
     [Fact]
-    public async Task Migrate_AppliesInitialCreateIdentity()
+    public async Task Migrate_AppliesInitialCreate()
     {
         var options = new DbContextOptionsBuilder<ApplicationDbContext>().UseNpgsql(fixture.ConnectionString).Options;
         await using var context = new ApplicationDbContext(options);
@@ -20,7 +20,7 @@ public class PostgresIdentitySchemaTests(PostgresContainerFixture fixture) : ICl
         await context.Database.MigrateAsync();
 
         var appliedMigrations = await context.Database.GetAppliedMigrationsAsync();
-        appliedMigrations.Should().Contain(migrationId => migrationId.Contains("InitialCreateIdentity"));
+        appliedMigrations.Should().Contain(migrationId => migrationId.Contains("InitialCreate"));
     }
 
     [Fact]
