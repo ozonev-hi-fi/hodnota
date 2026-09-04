@@ -1,3 +1,4 @@
+using Hodnota.Infrastructure.Catalog;
 using Hodnota.Infrastructure.Identity;
 
 using Microsoft.AspNetCore.Identity;
@@ -11,6 +12,9 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services)
     {
+        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<TimestampsInterceptor>();
+
         services.AddDbContext<ApplicationDbContext>((serviceProvider, options) =>
         {
             var configuration = serviceProvider.GetRequiredService<IConfiguration>();
@@ -27,6 +31,7 @@ public static class DependencyInjection
             }
 
             ConfigureProvider(options, provider, connectionString);
+            options.AddInterceptors(serviceProvider.GetRequiredService<TimestampsInterceptor>());
         });
 
         services
