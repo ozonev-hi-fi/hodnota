@@ -3,6 +3,7 @@ using System;
 using Hodnota.Infrastructure.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Hodnota.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260905114039_AddSharePage")]
+    partial class AddSharePage
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -333,9 +336,6 @@ namespace Hodnota.Infrastructure.Migrations
                     b.HasIndex("PlatformId", "ArtistId")
                         .IsUnique()
                         .HasFilter("\"ArtistId\" IS NOT NULL");
-
-                    b.HasIndex("PlatformId", "ExternalId")
-                        .IsUnique();
 
                     b.HasIndex("PlatformId", "ReleaseId")
                         .IsUnique()

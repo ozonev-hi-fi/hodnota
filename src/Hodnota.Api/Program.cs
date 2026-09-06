@@ -12,7 +12,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services
     .AddInfrastructure()
-    .AddDocumentation();
+    .AddDocumentation()
+    .AddControllers();
 
 var app = builder.Build();
 
@@ -39,5 +40,6 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapGroup("/api/auth").MapIdentityApi<ApplicationUser>();
+app.MapControllers();
 
 await app.RunAsync();

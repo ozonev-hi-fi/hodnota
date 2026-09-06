@@ -9,8 +9,8 @@ Epic-level plan, checked off as things get done. Task-level work doesn't belong 
 - [x] Implement auth (Identity) — email + password via ASP.NET Core Identity, bearer tokens, PostgreSQL (prod and local dev container) — see [decisions/0005](decisions/0005-auth-identity.md).
 - [x] Add OpenAPI generation + a dev-only interactive API UI (Scalar or similar, gated to Development, not shipped to prod) — see [decisions/0006](decisions/0006-openapi-scalar-dev-ui.md).
 - [x] Implement the catalog data model + EF Core migrations (Postgres/SQLite) — see [decisions/0007](decisions/0007-catalog-data-model.md).
-- [ ] Implement auth UI (Web) — register/login screens against the Identity API
-- [ ] Implement a first streaming provider end-to-end as a walking skeleton
+- [ ] Implement auth UI (Web) — register/login screens against the Identity API, plus the search/results pages consuming the `/api/catalog` endpoints from the item below (folded in once that item's UI half was descoped)
+- [x] Implement a first streaming provider — YouTube search + SharePage creation, backend only (no UI) — see [decisions/0008](decisions/0008-youtube-search-sharepage-skeleton.md). Originally scoped as an "end-to-end walking skeleton"; descoped to API+DB only once in progress, with the UI half moved to the item above instead.
 - [ ] Implement the remaining first-release providers
 - [ ] Figure out hosting — must be free (or effectively free) to start.
 - [ ] Integrate email service

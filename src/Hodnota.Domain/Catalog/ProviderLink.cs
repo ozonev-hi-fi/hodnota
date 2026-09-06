@@ -38,4 +38,6 @@ public sealed class ProviderLink : IHasTimestamps
     public Track? Track { get; set; }
 
     public Platform Platform { get; set; } = null!;
+
+    public ICollection<SharePageLink> SharePageLinks { get; set; } = [];
 }

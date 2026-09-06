@@ -51,5 +51,7 @@ public sealed class ProviderLinkConfiguration : IEntityTypeConfiguration<Provide
         builder.HasIndex(x => new { x.PlatformId, x.TrackId })
             .IsUnique()
             .HasFilter("\"TrackId\" IS NOT NULL");
+
+        builder.HasIndex(x => new { x.PlatformId, x.ExternalId }).IsUnique();
     }
 }

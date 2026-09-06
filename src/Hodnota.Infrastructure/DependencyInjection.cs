@@ -1,5 +1,10 @@
+using Google.Apis.Services;
+using Google.Apis.YouTube.v3;
+
+using Hodnota.Application.Catalog;
 using Hodnota.Infrastructure.Catalog;
 using Hodnota.Infrastructure.Identity;
+using Hodnota.Infrastructure.Providers.YouTube;
 
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -10,7 +15,13 @@ namespace Hodnota.Infrastructure;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddInfrastructure(this IServiceCollection services)
+    public static IServiceCollection AddInfrastructure(this IServiceCollection services) =>
+        services
+            .AddDatabase()
+            .AddAuth()
+            .AddCatalog();
+
+    private static IServiceCollection AddDatabase(this IServiceCollection services)
     {
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<TimestampsInterceptor>();
@@ -34,6 +45,11 @@ public static class DependencyInjection
             options.AddInterceptors(serviceProvider.GetRequiredService<TimestampsInterceptor>());
         });
 
+        return services;
+    }
+
+    private static IServiceCollection AddAuth(this IServiceCollection services)
+    {
         services
             .AddIdentityApiEndpoints<ApplicationUser>(options => options.SignIn.RequireConfirmedAccount = false)
             .AddRoles<IdentityRole<Guid>>()
@@ -41,6 +57,27 @@ public static class DependencyInjection
 
         services.AddAuthorization();
         services.AddSingleton<IEmailSender<ApplicationUser>, NoOpEmailSender>();
+
+        return services;
+    }
+
+    private static IServiceCollection AddCatalog(this IServiceCollection services)
+    {
+        services.AddMemoryCache();
+        services.AddSingleton(serviceProvider =>
+        {
+            var configuration = serviceProvider.GetRequiredService<IConfiguration>();
+            var apiKey = configuration[YouTubeConfiguration.ApiKeyConfigKey];
+
+            return string.IsNullOrEmpty(apiKey)
+                ? throw new InvalidOperationException($"Missing required configuration value '{YouTubeConfiguration.ApiKeyConfigKey}'.")
+                : new YouTubeService(new BaseClientService.Initializer { ApiKey = apiKey, ApplicationName = "Hodnota" });
+        });
+        services.AddSingleton<ISearchCandidateCache, MemorySearchCandidateCache>();
+        services.AddScoped<IStreamingProvider, YouTubeStreamingProvider>();
+        services.AddScoped<ICatalogRepository, EfCatalogRepository>();
+        services.AddScoped<CatalogSearchService>();
+        services.AddScoped<SharePageCreationService>();
 
         return services;
     }

@@ -4,6 +4,7 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="DotNetEnv" />
+    <PackageReference Include="Google.Apis.YouTube.v3" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
       <PrivateAssets>all</PrivateAssets>
@@ -14,5 +15,8 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Hodnota.Application\Hodnota.Application.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Hodnota.Infrastructure.Tests" />
   </ItemGroup>
 </Project>
