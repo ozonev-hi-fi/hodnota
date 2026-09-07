@@ -5,8 +5,6 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Hodnota.Infrastructure.Catalog.Configurations;
 
-// Reference implementation for the polymorphic nullable-FK + CHECK constraint + partial unique
-// index pattern also used by ProviderLinkConfiguration and EntityGenreConfiguration.
 public sealed class ArtistCreditConfiguration : IEntityTypeConfiguration<ArtistCredit>
 {
     public void Configure(EntityTypeBuilder<ArtistCredit> builder)

@@ -1,5 +1,4 @@
 namespace Hodnota.Application.Catalog;
 
-// PlatformCode matches Hodnota.Infrastructure.Catalog.PlatformCodes — Application only passes it
-// through, it never needs to know the concrete values.
+// PlatformCode matches Hodnota.Infrastructure.Catalog.PlatformCodes
 public sealed record ProviderLinkCandidate(string PlatformCode, string ExternalId, Uri ExternalUrl);

@@ -1,6 +1,6 @@
 namespace Hodnota.Domain.Catalog;
 
-// Exactly one of ArtistId/ReleaseId/TrackId is set — see SharePageConfiguration.
+// Exactly one of ArtistId/ReleaseId/TrackId is set — polymorphic.
 public sealed class SharePage : IHasTimestamps
 {
     public Guid Id { get; set; }

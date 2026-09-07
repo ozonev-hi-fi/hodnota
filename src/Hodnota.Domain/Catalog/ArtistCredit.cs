@@ -2,7 +2,7 @@ using System.ComponentModel;
 
 namespace Hodnota.Domain.Catalog;
 
-// Exactly one of ReleaseId/TrackId is set — see ArtistCreditConfiguration.
+// Exactly one of ReleaseId/TrackId is set - polymorphic.
 public sealed class ArtistCredit
 {
     public Guid Id { get; set; }

@@ -85,10 +85,15 @@ public class CatalogEndpointsTests(CatalogApiFactory factory) : IClassFixture<Ca
     public async Task Search_WhenProviderFails_ReturnsBadGateway()
     {
         factory.StreamingProvider.ThrowProviderException = true;
+        try
+        {
+            var response = await _client.PostAsJsonAsync("/api/catalog/search", new SearchRequest("nothing"));
 
-        var response = await _client.PostAsJsonAsync("/api/catalog/search", new SearchRequest("nothing"));
-
-        response.StatusCode.Should().Be(HttpStatusCode.BadGateway);
-        factory.StreamingProvider.ThrowProviderException = false;
+            response.StatusCode.Should().Be(HttpStatusCode.BadGateway);
+        }
+        finally
+        {
+            factory.StreamingProvider.ThrowProviderException = false;
+        }
     }
 }

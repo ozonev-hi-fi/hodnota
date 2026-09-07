@@ -2,7 +2,7 @@ using System.ComponentModel;
 
 namespace Hodnota.Domain.Catalog;
 
-// Exactly one of ArtistId/ReleaseId/TrackId is set — see ProviderLinkConfiguration.
+// Exactly one of ArtistId/ReleaseId/TrackId is set — polymorphic.
 public sealed class ProviderLink : IHasTimestamps
 {
     public Guid Id { get; set; }

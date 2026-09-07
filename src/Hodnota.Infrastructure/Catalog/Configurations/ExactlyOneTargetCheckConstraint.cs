@@ -1,7 +1,6 @@
 namespace Hodnota.Infrastructure.Catalog.Configurations;
 
-// Shared by every polymorphic nullable-FK entity configuration (ProviderLink, EntityGenre,
-// ArtistCredit, SharePage) so the "exactly one of N" SQL is written once, not copy-pasted per entity.
+// Shared by every polymorphic nullable-FK entity configuration so the "exactly one of N" SQL is written once, not copy-pasted per entity
 internal static class ExactlyOneTargetCheckConstraint
 {
     public static string Sql(params string[] columnNames) =>

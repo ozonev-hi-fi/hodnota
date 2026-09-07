@@ -25,7 +25,6 @@ public sealed class SharePageConfiguration : IEntityTypeConfiguration<SharePage>
             .HasForeignKey(x => x.TrackId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // No CLR navigation on SharePage — Hodnota.Domain must not depend on Hodnota.Infrastructure.Identity.
         builder.HasOne<ApplicationUser>()
             .WithMany()
             .HasForeignKey(x => x.UserId)

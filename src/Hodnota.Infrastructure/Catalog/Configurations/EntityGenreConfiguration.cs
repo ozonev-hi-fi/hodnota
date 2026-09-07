@@ -33,7 +33,6 @@ public sealed class EntityGenreConfiguration : IEntityTypeConfiguration<EntityGe
             "CK_EntityGenre_ExactlyOneTarget",
             ExactlyOneTargetCheckConstraint.Sql("ArtistId", "ReleaseId", "TrackId")));
 
-        // Three partial unique indexes, one per target type — see ProviderLinkConfiguration.
         builder.HasIndex(x => new { x.GenreId, x.ArtistId })
             .IsUnique()
             .HasFilter("\"ArtistId\" IS NOT NULL");
