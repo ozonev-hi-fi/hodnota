@@ -89,7 +89,7 @@ public class CatalogEndpointsTests(CatalogApiFactory factory) : IClassFixture<Ca
         {
             var response = await _client.PostAsJsonAsync("/api/catalog/search", new SearchRequest("nothing"));
 
-            response.StatusCode.Should().Be(HttpStatusCode.BadGateway);
+            response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         }
         finally
         {
