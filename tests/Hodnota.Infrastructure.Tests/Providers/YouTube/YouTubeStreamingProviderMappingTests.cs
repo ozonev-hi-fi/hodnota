@@ -66,4 +66,56 @@ public class YouTubeStreamingProviderMappingTests
             new ProviderLinkCandidate(PlatformCodes.YouTubeMusic, "OLAK5uy_abc", new Uri("https://music.youtube.com/playlist?list=OLAK5uy_abc")),
         ]);
     }
+
+    [Fact]
+    public void ToSearchResult_NullThumbnailsObject_DoesNotThrowAndImageUrlIsNull()
+    {
+        var item = NewVideoResult();
+        item.Snippet.Thumbnails = null;
+
+        var result = YouTubeStreamingProvider.ToSearchResult(item);
+
+        result.ImageUrl.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void ToSearchResult_BlankChannelTitle_FallsBackToUnknown(string? channelTitle)
+    {
+        var item = NewVideoResult();
+        item.Snippet.ChannelTitle = channelTitle;
+
+        var result = YouTubeStreamingProvider.ToSearchResult(item);
+
+        result.ArtistName.Should().Be("Unknown");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void IsUsable_BlankTitle_ReturnsFalse(string? title)
+    {
+        var item = NewVideoResult();
+        item.Snippet.Title = title;
+
+        YouTubeStreamingProvider.IsUsable(item).Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsUsable_NullSnippet_ReturnsFalse()
+    {
+        var item = NewVideoResult();
+        item.Snippet = null;
+
+        YouTubeStreamingProvider.IsUsable(item).Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsUsable_UsableVideoResult_ReturnsTrue()
+    {
+        YouTubeStreamingProvider.IsUsable(NewVideoResult()).Should().BeTrue();
+    }
 }

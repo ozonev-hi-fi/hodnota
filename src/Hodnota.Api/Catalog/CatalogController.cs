@@ -12,7 +12,15 @@ public sealed class CatalogController(CatalogSearchService searchService, ShareP
     [HttpPost("search")]
     public async Task<ActionResult<IReadOnlyList<SearchCandidateResponse>>> Search(SearchRequest request, CancellationToken cancellationToken)
     {
-        var candidates = await searchService.SearchAsync(request.Search, cancellationToken);
+        IReadOnlyList<CatalogSearchCandidate> candidates;
+        try
+        {
+            candidates = await searchService.SearchAsync(request.Search, cancellationToken);
+        }
+        catch (StreamingProviderException)
+        {
+            return BadRequest("The search provider is currently unavailable.");
+        }
 
         IReadOnlyList<SearchCandidateResponse> response = [.. candidates.Select(candidate => candidate.ToResponse())];
         return Ok(response);

@@ -2,24 +2,38 @@ using Hodnota.Application.Catalog;
 using Hodnota.Domain.Catalog;
 using Hodnota.Infrastructure.Identity;
 
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+
+using Npgsql;
 
 namespace Hodnota.Infrastructure.Catalog;
 
 public sealed class EfCatalogRepository(ApplicationDbContext dbContext) : ICatalogRepository
 {
+    private const string ProviderLinkExternalIdIndexName = "IX_ProviderLinks_PlatformId_ExternalId";
+
     public async Task<SharePageResult> CreateSharePageAsync(StreamingSearchResult result, CancellationToken cancellationToken)
     {
         try
         {
             return await CreateSharePageCoreAsync(result, cancellationToken);
         }
-        catch (DbUpdateException)
+        catch (DbUpdateException ex) when (IsProviderLinkExternalIdConflict(ex))
         {
+            // A concurrent resolve for the same external ID committed first, tripping the unique index
+            // between our lookup and our insert — retry once so the now-committed row is found and reused.
             dbContext.ChangeTracker.Clear();
             return await CreateSharePageCoreAsync(result, cancellationToken);
         }
     }
+
+    internal static bool IsProviderLinkExternalIdConflict(DbUpdateException ex) => ex.InnerException switch
+    {
+        PostgresException pg => pg.SqlState == PostgresErrorCodes.UniqueViolation && pg.ConstraintName == ProviderLinkExternalIdIndexName,
+        SqliteException sqlite => sqlite.SqliteExtendedErrorCode == 2067 && sqlite.Message.Contains("ProviderLinks.PlatformId, ProviderLinks.ExternalId"),
+        _ => false,
+    };
 
     private async Task<SharePageResult> CreateSharePageCoreAsync(StreamingSearchResult result, CancellationToken cancellationToken)
     {
@@ -90,6 +104,8 @@ public sealed class EfCatalogRepository(ApplicationDbContext dbContext) : ICatal
         }
 
         var artist = new Artist { Name = result.ArtistName };
+        // YouTube playlist search results carry no EP/Single/Compilation/Live signal — Album is the
+        // least-wrong default for "some kind of release", not a considered classification.
         var release = new Release { Title = result.Name, Type = ReleaseType.Album };
         dbContext.AddRange(artist, release, new ArtistCredit { Artist = artist, Release = release, Role = CreditRole.MainArtist });
         var newLinks = CreateProviderLinks(result.Links, platformsByCode, release: release);
@@ -120,7 +136,7 @@ public sealed class EfCatalogRepository(ApplicationDbContext dbContext) : ICatal
         {
             Track = track,
             Release = release,
-            Platform = platformsByCode[link.PlatformCode],
+            Platform = GetPlatform(platformsByCode, link.PlatformCode),
             ExternalId = link.ExternalId,
             ExternalUrl = link.ExternalUrl,
         })];
@@ -136,9 +152,14 @@ public sealed class EfCatalogRepository(ApplicationDbContext dbContext) : ICatal
             .ToListAsync(cancellationToken);
 
         return links
-            .Select(link => candidates.FirstOrDefault(pl => pl.ExternalId == link.ExternalId && pl.PlatformId == platformsByCode[link.PlatformCode].Id))
+            .Select(link => candidates.FirstOrDefault(pl => pl.ExternalId == link.ExternalId && pl.PlatformId == GetPlatform(platformsByCode, link.PlatformCode).Id))
             .FirstOrDefault(match => match is not null);
     }
+
+    private static Platform GetPlatform(IReadOnlyDictionary<string, Platform> platformsByCode, string platformCode) =>
+        platformsByCode.TryGetValue(platformCode, out var platform)
+            ? platform
+            : throw new InvalidOperationException($"Platform code '{platformCode}' has no seeded Platform row.");
 
     private readonly record struct EntityResolution(Guid EntityId, string Name, string ArtistName, List<ProviderLink> ProviderLinks);
 }

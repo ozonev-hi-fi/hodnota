@@ -7,6 +7,10 @@ public sealed class StubStreamingProvider : IStreamingProvider
 {
     public List<StreamingSearchResult> Results { get; set; } = [];
 
+    public bool ThrowProviderException { get; set; }
+
     public Task<IReadOnlyList<StreamingSearchResult>> SearchAsync(string query, CancellationToken cancellationToken) =>
-        Task.FromResult<IReadOnlyList<StreamingSearchResult>>(Results);
+        ThrowProviderException
+            ? throw new StreamingProviderException("Simulated provider failure.", new InvalidOperationException())
+            : Task.FromResult<IReadOnlyList<StreamingSearchResult>>(Results);
 }

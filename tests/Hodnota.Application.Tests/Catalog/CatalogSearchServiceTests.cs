@@ -50,4 +50,19 @@ public class CatalogSearchServiceTests
         candidates.Should().HaveCount(2);
         candidates.Select(c => c.Result.Name).Should().BeEquivalentTo(["From A", "From B"]);
     }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task SearchAsync_BlankQuery_ReturnsEmptyWithoutCallingProviders(string query)
+    {
+        var provider = Substitute.For<IStreamingProvider>();
+        var cache = Substitute.For<ISearchCandidateCache>();
+        var service = new CatalogSearchService([provider], cache);
+
+        var candidates = await service.SearchAsync(query, CancellationToken.None);
+
+        candidates.Should().BeEmpty();
+        await provider.DidNotReceive().SearchAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
 }

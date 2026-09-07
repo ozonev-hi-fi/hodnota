@@ -4,6 +4,11 @@ public sealed class CatalogSearchService(IEnumerable<IStreamingProvider> provide
 {
     public async Task<IReadOnlyList<CatalogSearchCandidate>> SearchAsync(string query, CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return [];
+        }
+
         var resultsByProvider = await Task.WhenAll(providers.Select(provider => provider.SearchAsync(query, cancellationToken)));
 
         return [.. resultsByProvider

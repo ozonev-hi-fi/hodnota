@@ -64,3 +64,72 @@ The only endpoints in the codebase today (`MapIdentityApi<ApplicationUser>()`, m
 - Establishes MVC Controllers as the convention for all future hand-written API endpoints.
 - `SharePage`/`SharePageLink` join the catalog schema in `Hodnota.Infrastructure/Catalog/Configurations/`, migrated via the existing single `ApplicationDbContext`/`Hodnota.Infrastructure/Migrations/` history — no new `DbContext`, matching [decisions/0007](0007-catalog-data-model.md)'s precedent. Needs the same SQLite fast-test-plus-Testcontainers-Postgres integration-test pass as any schema-changing feature.
 - [architecture.md](../architecture.md)'s Data Model and Open Questions sections are updated once this is implemented, and [roadmap.md](../roadmap.md)'s walking-skeleton checkbox is checked off.
+
+## Also in this branch: CI security/quality scanning
+
+A separate, unrelated roadmap item — "Add CI security/quality scanning (SAST, SCA, SBOM, license gate)" — was drafted earlier (`docs/decisions/drafts/ci-security-scanning.md`, on its own branch) and stashed with uncommitted WIP. Rather than resurrect a separate branch for it, it's folded into this one and recorded here instead of as its own numbered ADR, since this branch had already touched a large fraction of the codebase and the draft was ready to implement.
+
+### Context
+
+Catch vulnerabilities, code smells, duplication, likely bugs, and dependency risk automatically in CI, plus produce CycloneDX SBOMs and a lightweight license/legal-clearance signal — all on tooling that's free and won't get pulled out from under the project later. SonarQube, Snyk, and CycloneDX were named as known tools, not mandated choices.
+
+Repo facts, re-confirmed at implementation time (2026-09-06):
+- Repo is **public** (`ozonev-hi-fi/hodnota`, confirmed via `gh repo view`) — this is what makes CodeQL, Dependabot, and secret scanning free with no usage caps. If the repo ever goes private, this whole stack needs re-evaluation (GitHub Advanced Security becomes paid for private repos).
+- Stack: .NET 10 backend (`Directory.Packages.props`, `global.json` pinned to `10.0.400`) + React/Vite/TS web app under `/web` (npm, Biome).
+- Existing CI convention ([decisions/0004](0004-scaffold-backend-and-web-app.md)): two independent, path-filtered workflows (`ci-backend.yml`, `ci-web.yml`), advisory only (no required status checks/branch protection yet).
+- No `LICENSE` file exists yet at repo root — the project's own license is a separate open question, out of scope here.
+
+### Decision
+
+| Need | Tool | Why this one |
+|---|---|---|
+| Vulnerabilities + likely bugs (SAST) | **CodeQL** (`github/codeql-action`) | Free forever for public repos, GitHub-native, covers C# and JS/TS, deep taint-tracking analysis. |
+| Dependency vulnerabilities | **Dependabot alerts** (repo setting) + **Dependency Review Action** (PR-diff gate) | Both free/uncapped for public repos, GitHub-native, zero extra accounts. |
+| Dependency version currency | **Dependabot version updates** (`.github/dependabot.yml`) | Free, native, opens PRs itself — no workflow needed. |
+| SBOM | **CycloneDX** — `CycloneDX` dotnet tool for backend, `@cyclonedx/cyclonedx-npm` for web | Explicitly requested; both are the official CycloneDX-org tools for their ecosystem, free/OSS, no account needed. |
+| Legal/license clearance | **Dependency Review Action's license allow/deny list** (PR gate) + the **CycloneDX SBOM's license fields** (standing inventory) | Reuses tools already in the stack instead of adding a dedicated (usually paid) legal tool — "good enough" clearance for a solo pre-1.0 project. |
+| Secret leaks | **GitHub secret scanning + push protection** (repo setting) | Free for public repos, zero config, directly serves "find vulnerabilities." Not explicitly requested but a zero-cost, obvious gap otherwise. |
+
+**Code smells, duplication, and maintainability metrics are explicitly not covered** — see "Rejected alternatives" below for why SonarCloud, this need's original candidate, doesn't hold up, and why nothing replaces it in this pass.
+
+Workflow shape: `codeql.yml` (language matrix, not path-filtered, matches GitHub's default-setup shape), `dependency-review.yml` (PR-only, severity threshold + copyleft license deny-list), `sbom.yml` (push to develop/main + manual dispatch, uploads CycloneDX SBOMs as artifacts), and `.github/dependabot.yml`.
+
+Repo settings (secret scanning, push protection, Dependabot alerts) are toggled via `gh api` rather than the GitHub UI, per the original draft's pre-authorization — this needs a `gh` session with admin rights on the repo (see `CLAUDE.local.md` to check if it contains machine's account-switching setup, not relevant to other environments):
+
+```
+gh api -X PATCH repos/ozonev-hi-fi/hodnota --input - <<'EOF'
+{
+  "security_and_analysis": {
+    "secret_scanning": { "status": "enabled" },
+    "secret_scanning_push_protection": { "status": "enabled" }
+  }
+}
+EOF
+gh api -X PUT repos/ozonev-hi-fi/hodnota/vulnerability-alerts
+gh api -X PUT repos/ozonev-hi-fi/hodnota/automated-security-fixes
+```
+
+### Public-repo dependency — check this first if visibility ever changes
+
+Every tool above was picked *because* it's free for a public repo. If `ozonev-hi-fi/hodnota` is ever flipped to private, walk this table before assuming the CI stack still works as designed:
+
+| Tool | Public-repo-gated? | What happens if the repo goes private |
+|---|---|---|
+| CodeQL | **Yes** | Requires GitHub Advanced Security (paid per committer) on a private repo. Needs replacing (e.g. self-hosted CodeQL CLI in a workflow, or drop to a different free SAST) or budget approval. |
+| Secret scanning + push protection | **Yes** | Same GHAS gate as CodeQL. Free open-source alternative if needed: `gitleaks` or `trufflehog` as a workflow step. |
+| Dependency Review Action | **Yes** | Requires the Dependency graph + GHAS on private repos. Replace with `osv-scanner` (fully free, no visibility gate) run against lockfiles as a PR step. |
+| Dependabot alerts + version updates | No | Free on GitHub regardless of repo visibility — no action needed if the repo goes private. |
+| CycloneDX SBOM generation | No | Both are local CLI tools running inside the workflow, not a hosted service gated by repo visibility — unaffected either way. |
+
+A private-repo pivot doesn't quietly degrade this setup — it visibly breaks CodeQL/secret-scanning/Dependency-Review (workflows fail or GitHub disables the feature), which is the trigger to come back here and swap in the free-regardless-of-visibility alternatives named above.
+
+### Consequences (CI scanning)
+
+- Depends on the repo staying public — see "Public-repo dependency" above for exactly which tools break and what to replace them with if that ever changes.
+- **Rejected alternatives, with reasons:**
+  - **SonarCloud** — the draft's original pick for code smells/duplication/maintainability, based on an advertised free-for-public-repos tier. Re-verified at implementation time: signing up prompts for payment details with an auto-charge-after-trial structure in practice, regardless of a nominally free "OSS plan" existing somewhere in Sonar's plan matrix — exactly the "gets pulled out from under the project later" failure mode this whole exercise was trying to avoid, same category as Snyk below. No replacement tool is substituted in this pass — see the uncovered-need note above.
+  - **Snyk** — free tier is usage-capped (limited tests/month); equivalent coverage is already free and uncapped for a public repo via CodeQL + Dependabot + Dependency Review. A capped free tier is exactly the "not future proof" failure mode this was trying to avoid.
+  - **Self-hosted SonarQube Community Edition** — needs hosting infra, and hosting itself is still an open question in [architecture.md](../architecture.md). Revisit only if the repo goes private, or the CI budget/hosting picture changes enough to make self-hosting worthwhile.
+  - **FOSSA / dedicated license-compliance SaaS** — paid, overkill for a pre-1.0 solo project. The Dependency Review license gate + CycloneDX SBOM license data is enough for now.
+  - **OSV-Scanner, jscpd, ORT** — real tools, but redundant with what CodeQL/Dependabot already cover, or (for `jscpd`'s duplication detection specifically) not yet justified by a demonstrated problem — matching this project's established YAGNI discipline (see [decisions/0007](0007-catalog-data-model.md)). Candidates if a genuine coverage gap shows up later, `jscpd` foremost since duplication detection is the one need nothing above actually covers.
+- [roadmap.md](../roadmap.md)'s CI-scanning checkbox is checked off; the draft file this section absorbs is deleted.

@@ -33,10 +33,6 @@ public sealed class SharePageConfiguration : IEntityTypeConfiguration<SharePage>
 
         builder.ToTable(t => t.HasCheckConstraint(
             "CK_SharePage_ExactlyOneTarget",
-            """
-            (CASE WHEN "ArtistId" IS NOT NULL THEN 1 ELSE 0 END) +
-            (CASE WHEN "ReleaseId" IS NOT NULL THEN 1 ELSE 0 END) +
-            (CASE WHEN "TrackId" IS NOT NULL THEN 1 ELSE 0 END) = 1
-            """));
+            ExactlyOneTargetCheckConstraint.Sql("ArtistId", "ReleaseId", "TrackId")));
     }
 }

@@ -18,5 +18,6 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Hodnota.Infrastructure.Tests" />
+    <InternalsVisibleTo Include="Hodnota.Infrastructure.IntegrationTests" />
   </ItemGroup>
 </Project>

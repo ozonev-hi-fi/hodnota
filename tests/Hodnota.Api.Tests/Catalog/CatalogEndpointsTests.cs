@@ -72,4 +72,23 @@ public class CatalogEndpointsTests(CatalogApiFactory factory) : IClassFixture<Ca
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
+
+    [Fact]
+    public async Task Search_WithEmptySearch_ReturnsBadRequest()
+    {
+        var response = await _client.PostAsJsonAsync("/api/catalog/search", new SearchRequest(""));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Search_WhenProviderFails_ReturnsBadGateway()
+    {
+        factory.StreamingProvider.ThrowProviderException = true;
+
+        var response = await _client.PostAsJsonAsync("/api/catalog/search", new SearchRequest("nothing"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadGateway);
+        factory.StreamingProvider.ThrowProviderException = false;
+    }
 }
