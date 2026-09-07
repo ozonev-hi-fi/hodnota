@@ -3,7 +3,6 @@ using Microsoft.EntityFrameworkCore.Design;
 
 namespace Hodnota.Infrastructure.Identity;
 
-// Needed because ApplicationDbContext lives in a class library with no host to supply options at design time.
 public sealed class ApplicationDbContextFactory : IDesignTimeDbContextFactory<ApplicationDbContext>
 {
     public ApplicationDbContext CreateDbContext(string[] args)

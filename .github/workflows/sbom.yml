@@ -1,0 +1,53 @@
+name: SBOM
+
+on:
+  push:
+    branches: ["develop", "main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend-sbom:
+    name: Backend SBOM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - run: dotnet tool install --global CycloneDX
+
+      - run: dotnet-CycloneDX hodnota.slnx -o . -F Json -t
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-sbom
+          path: bom.json
+
+  web-sbom:
+    name: Web SBOM
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - run: npm ci
+
+      - run: npx @cyclonedx/cyclonedx-npm --output-file web-bom.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-sbom
+          path: web/web-bom.json

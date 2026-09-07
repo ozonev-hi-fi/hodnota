@@ -13,7 +13,9 @@ Status: v1 architecture designed — see [decisions/0003](decisions/0003-initial
 
 ## Streaming-provider integration
 
-Each supported service (see list below) implements a shared `IStreamingProvider` interface (search, match, resolve-by-URL) in its own class under `Hodnota.Infrastructure.Providers.<Service>`, with its own auth and rate-limit handling. An Application-layer aggregator fans a request out to all registered providers. Reasoning and interface shape: [decisions/0003](decisions/0003-initial-architecture.md).
+Each supported service (see list below) implements a shared `IStreamingProvider` interface in its own class under `Hodnota.Infrastructure.Providers.<Service>`, with its own auth and rate-limit handling. Only search is implemented today; match and resolve-by-URL were [decisions/0003](decisions/0003-initial-architecture.md)'s original sketch for the interface but aren't built yet — added if/when a real caller needs them. An Application-layer aggregator fans a request out to all registered providers. `IStreamingProvider` is what's fixed by this abstraction — the mechanism a provider uses *internally* to talk to its service is that provider's own implementation choice: an official free SDK when the vendor provides one, otherwise a named `HttpClient` via `IHttpClientFactory`. Reasoning and interface shape: [decisions/0003](decisions/0003-initial-architecture.md), clarified by [decisions/0008](decisions/0008-youtube-search-sharepage-skeleton.md).
+
+First implementation: YouTube (`Hodnota.Infrastructure.Providers.YouTube.YouTubeStreamingProvider`), search-only via the official `Google.Apis.YouTube.v3` SDK (a DI-singleton `YouTubeService`, so its internal HTTP handler is reused rather than recreated per request). There is no separate YouTube Music search API — both a YouTube and a YouTube Music link are derived from the same search hit by a domain swap (`www.youtube.com` → `music.youtube.com`, same path/query). Reasoning: [decisions/0008](decisions/0008-youtube-search-sharepage-skeleton.md).
 
 ## Authentication & Authorization
 
@@ -31,15 +33,17 @@ The root `.env` file is the single source of truth for the local dev Postgres cr
 
 ## Data Model
 
-A persisted catalog of `Artist`/`Release`/`Track` entities plus `ProviderLink`s, built up as a side effect of the searches needed to construct sharing pages — intended to be reusable by future, unrelated projects (a "Music Wikipedia"). `SharePage` (not yet built) will reference a catalog entity and carry its own filtered/ordered list of provider links.
+A persisted catalog of `Artist`/`Release`/`Track` entities plus `ProviderLink`s, built up as a side effect of the searches needed to construct sharing pages — intended to be reusable by future, unrelated projects (a "Music Wikipedia"). `SharePage` references a catalog entity and carries its own ordered list of provider links (via the `SharePageLink` join table, `DisplayOrder`/`IsVisible`) to display.
 
 - **`Artist`/`Release`/`Track`**: `Release` generalizes Album/EP/Single/Compilation/Live behind one `ReleaseType`. A `Track` can appear on more than one `Release` (original album, later compilation, reissue) via the `ReleaseTrack` junction — not a one-to-many FK — since the same recording is identified across releases by `Isrc` (`Release.Upc` plays the same natural-key role). Multi-artist attribution is a normalized `ArtistCredit` join (`Role`: `MainArtist`/`Featured`/`Producer`/`Composer`/`Remixer`), with a database-enforced partial unique index guaranteeing at most one `MainArtist` credit per `Release`/`Track`.
 - **`Platform`**: a dynamic, DB-managed catalog dimension (seeded with the supported-services list below) that a `ProviderLink` points to — distinct from, and refining, the `IStreamingProvider` code abstraction above, which remains the mechanism for actively searching/resolving a service's API. `Platform` lets the catalog carry links to services with no automated integration yet. Retiring a platform sets `IsActive = false` rather than deleting the row — `ProviderLink.PlatformId` is `Restrict`, so existing links are never silently lost.
 - **`ProviderLink`**, `EntityGenre` (a `Genre` tag on an `Artist`/`Release`/`Track`): both are polymorphic over the same three catalog entity types, using nullable FK columns plus a DB CHECK constraint (exactly one target set) rather than a loose `entity_type`/`entity_id` pair, and three partial unique indexes per target type rather than one composite index (standard SQL NULL semantics would let a composite index silently miss real duplicates).
 - Every primary entity (`Artist`, `Release`, `Track`, `Platform`, `Genre`, `RecordLabel`, `ProviderLink`) carries `CreatedAtUtc`/`UpdatedAtUtc`, populated by a `TimestampsInterceptor` (`SaveChangesInterceptor`) via an injected `TimeProvider`. URL properties are `Uri`, not `string`; every `DateTimeOffset` in the model (including Identity's own) is normalized to UTC by a model-wide converter registered in `ApplicationDbContext.ConfigureConventions`.
-- Deferred: `SharePage`, repository interfaces in `Hodnota.Application`, `Artist.Biography`/localized description text, `Track.Lyrics`, JSONB/flexible metadata columns, local/blob image storage.
+- **`SharePage`/`SharePageLink`**: `SharePage` is polymorphic over `Artist`/`Release`/`Track` the same way as `ProviderLink` (nullable FKs + CHECK constraint), plus a nullable `UserId` (anonymous creation for now — no auth UI yet, see [decisions/0008](decisions/0008-youtube-search-sharepage-skeleton.md)). Unlike `ProviderLink`, no per-target uniqueness is enforced — the same catalog entity can have more than one `SharePage`. `SharePageLink` joins a `SharePage` to a `ProviderLink` it displays, carrying `DisplayOrder` and `IsVisible` so a page owner can exclude a link the catalog otherwise has, without copying link data onto the page.
+- Catalog fill on resolve reuses an existing `Artist`/`Release`/`Track` only via an exact `ProviderLink(PlatformId, ExternalId)` match; broader fuzzy/cross-provider dedup is deferred.
+- Deferred: repository interfaces beyond the first `ICatalogRepository` (see [decisions/0008](decisions/0008-youtube-search-sharepage-skeleton.md)), fuzzy dedup matching, `SharePage` link customization endpoints, `Artist.Biography`/localized description text, `Track.Lyrics`, JSONB/flexible metadata columns, local/blob image storage.
 
-Full reasoning: [decisions/0007](decisions/0007-catalog-data-model.md).
+Full reasoning: [decisions/0007](decisions/0007-catalog-data-model.md), [decisions/0008](decisions/0008-youtube-search-sharepage-skeleton.md).
 
 ## Tooling & Conventions
 
@@ -84,7 +88,6 @@ Not strictly "architecture," but decided and settled, so it lives here rather th
 
 ## Open Questions
 
-- `SharePage`'s schema — deferred until "Implement a first streaming provider end-to-end as a walking skeleton" actually starts, see [decisions/0007](decisions/0007-catalog-data-model.md).
 - Provider-specific auth and implementation details, per streaming service.
 - SPA build glue (Dockerfile or build script) to produce the single deployable artifact.
 - Mobile app's secure token storage and refresh-flow UX (the wire mechanism — bearer tokens against the shared `MapIdentityApi` endpoints — is decided, see [decisions/0005](decisions/0005-auth-identity.md)).

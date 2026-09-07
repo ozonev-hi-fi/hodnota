@@ -30,6 +30,10 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
 
     public DbSet<RecordLabel> RecordLabels => Set<RecordLabel>();
 
+    public DbSet<SharePage> SharePages => Set<SharePage>();
+
+    public DbSet<SharePageLink> SharePageLinks => Set<SharePageLink>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);

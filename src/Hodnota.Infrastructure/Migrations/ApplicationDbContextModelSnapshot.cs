@@ -334,6 +334,9 @@ namespace Hodnota.Infrastructure.Migrations
                         .IsUnique()
                         .HasFilter("\"ArtistId\" IS NOT NULL");
 
+                    b.HasIndex("PlatformId", "ExternalId")
+                        .IsUnique();
+
                     b.HasIndex("PlatformId", "ReleaseId")
                         .IsUnique()
                         .HasFilter("\"ReleaseId\" IS NOT NULL");
@@ -443,6 +446,76 @@ namespace Hodnota.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("ReleaseTracks");
+                });
+
+            modelBuilder.Entity("Hodnota.Domain.Catalog.SharePage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ArtistId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ReleaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TrackId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ArtistId");
+
+                    b.HasIndex("ReleaseId");
+
+                    b.HasIndex("TrackId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("SharePages", t =>
+                        {
+                            t.HasCheckConstraint("CK_SharePage_ExactlyOneTarget", "(CASE WHEN \"ArtistId\" IS NOT NULL THEN 1 ELSE 0 END) +\n(CASE WHEN \"ReleaseId\" IS NOT NULL THEN 1 ELSE 0 END) +\n(CASE WHEN \"TrackId\" IS NOT NULL THEN 1 ELSE 0 END) = 1");
+                        });
+                });
+
+            modelBuilder.Entity("Hodnota.Domain.Catalog.SharePageLink", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsVisible")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<Guid>("ProviderLinkId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SharePageId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProviderLinkId");
+
+                    b.HasIndex("SharePageId", "ProviderLinkId")
+                        .IsUnique();
+
+                    b.ToTable("SharePageLinks");
                 });
 
             modelBuilder.Entity("Hodnota.Domain.Catalog.Track", b =>
@@ -794,6 +867,54 @@ namespace Hodnota.Infrastructure.Migrations
                     b.Navigation("Track");
                 });
 
+            modelBuilder.Entity("Hodnota.Domain.Catalog.SharePage", b =>
+                {
+                    b.HasOne("Hodnota.Domain.Catalog.Artist", "Artist")
+                        .WithMany()
+                        .HasForeignKey("ArtistId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("Hodnota.Domain.Catalog.Release", "Release")
+                        .WithMany()
+                        .HasForeignKey("ReleaseId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("Hodnota.Domain.Catalog.Track", "Track")
+                        .WithMany()
+                        .HasForeignKey("TrackId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("Hodnota.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Artist");
+
+                    b.Navigation("Release");
+
+                    b.Navigation("Track");
+                });
+
+            modelBuilder.Entity("Hodnota.Domain.Catalog.SharePageLink", b =>
+                {
+                    b.HasOne("Hodnota.Domain.Catalog.ProviderLink", "ProviderLink")
+                        .WithMany("SharePageLinks")
+                        .HasForeignKey("ProviderLinkId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Hodnota.Domain.Catalog.SharePage", "SharePage")
+                        .WithMany("Links")
+                        .HasForeignKey("SharePageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ProviderLink");
+
+                    b.Navigation("SharePage");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
                 {
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole<System.Guid>", null)
@@ -864,6 +985,11 @@ namespace Hodnota.Infrastructure.Migrations
                     b.Navigation("ProviderLinks");
                 });
 
+            modelBuilder.Entity("Hodnota.Domain.Catalog.ProviderLink", b =>
+                {
+                    b.Navigation("SharePageLinks");
+                });
+
             modelBuilder.Entity("Hodnota.Domain.Catalog.RecordLabel", b =>
                 {
                     b.Navigation("Releases");
@@ -878,6 +1004,11 @@ namespace Hodnota.Infrastructure.Migrations
                     b.Navigation("ProviderLinks");
 
                     b.Navigation("Tracks");
+                });
+
+            modelBuilder.Entity("Hodnota.Domain.Catalog.SharePage", b =>
+                {
+                    b.Navigation("Links");
                 });
 
             modelBuilder.Entity("Hodnota.Domain.Catalog.Track", b =>

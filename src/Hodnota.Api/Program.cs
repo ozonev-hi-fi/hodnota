@@ -1,3 +1,5 @@
+using Google.Apis.YouTube.v3;
+
 using Hodnota.Api.OpenApi;
 using Hodnota.Infrastructure;
 using Hodnota.Infrastructure.Identity;
@@ -12,7 +14,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services
     .AddInfrastructure()
-    .AddDocumentation();
+    .AddDocumentation()
+    .AddControllers();
 
 var app = builder.Build();
 
@@ -27,6 +30,9 @@ await using (var scope = app.Services.CreateAsyncScope())
     {
         await dbContext.Database.EnsureCreatedAsync();
     }
+
+    // Forces the YouTubeService singleton factory to run now. Failing fast on a missing/invalid YouTube:ApiKey at startup.
+    _ = scope.ServiceProvider.GetRequiredService<YouTubeService>();
 }
 
 app.UseAuthentication();
@@ -39,5 +45,6 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapGroup("/api/auth").MapIdentityApi<ApplicationUser>();
+app.MapControllers();
 
 await app.RunAsync();

@@ -24,6 +24,8 @@ public class ApplicationDbContextCatalogTests
         "Genres",
         "EntityGenres",
         "RecordLabels",
+        "SharePages",
+        "SharePageLinks",
     ];
 
     private static async Task<(SqliteConnection Connection, ApplicationDbContext Context)> CreateContextAsync(
@@ -232,6 +234,26 @@ public class ApplicationDbContextCatalogTests
         await context.SaveChangesAsync();
 
         context.ProviderLinks.Add(new ProviderLink { Artist = artist, Platform = platform, ExternalId = "id-2", ExternalUrl = new Uri("https://example.com/2") });
+        var act = () => context.SaveChangesAsync();
+
+        await act.Should().ThrowAsync<DbUpdateException>();
+    }
+
+    [Fact]
+    public async Task ProviderLink_DuplicatePlatformAndExternalId_ViolatesUniqueIndex()
+    {
+        var (connection, context) = await CreateContextAsync();
+        await using var _ = connection;
+        await using var __ = context;
+
+        var track1 = NewTrack("Track 1");
+        var track2 = NewTrack("Track 2");
+        var platform = await context.Platforms.FirstAsync();
+        context.AddRange(track1, track2);
+        context.ProviderLinks.Add(new ProviderLink { Track = track1, Platform = platform, ExternalId = "shared-id", ExternalUrl = new Uri("https://example.com/1") });
+        await context.SaveChangesAsync();
+
+        context.ProviderLinks.Add(new ProviderLink { Track = track2, Platform = platform, ExternalId = "shared-id", ExternalUrl = new Uri("https://example.com/2") });
         var act = () => context.SaveChangesAsync();
 
         await act.Should().ThrowAsync<DbUpdateException>();

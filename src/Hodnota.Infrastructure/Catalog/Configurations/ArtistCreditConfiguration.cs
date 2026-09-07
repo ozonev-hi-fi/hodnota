@@ -5,8 +5,6 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Hodnota.Infrastructure.Catalog.Configurations;
 
-// Reference implementation for the polymorphic nullable-FK + CHECK constraint + partial unique
-// index pattern also used by ProviderLinkConfiguration and EntityGenreConfiguration.
 public sealed class ArtistCreditConfiguration : IEntityTypeConfiguration<ArtistCredit>
 {
     public void Configure(EntityTypeBuilder<ArtistCredit> builder)
@@ -31,10 +29,7 @@ public sealed class ArtistCreditConfiguration : IEntityTypeConfiguration<ArtistC
 
         builder.ToTable(t => t.HasCheckConstraint(
             "CK_ArtistCredit_ExactlyOneTarget",
-            """
-            (CASE WHEN "ReleaseId" IS NOT NULL THEN 1 ELSE 0 END) +
-            (CASE WHEN "TrackId" IS NOT NULL THEN 1 ELSE 0 END) = 1
-            """));
+            ExactlyOneTargetCheckConstraint.Sql("ReleaseId", "TrackId")));
 
         builder.HasIndex(x => x.ReleaseId)
             .IsUnique()

@@ -110,6 +110,25 @@ public class PostgresCatalogSchemaTests(PostgresContainerFixture fixture) : ICla
     }
 
     [Fact]
+    public async Task ProviderLink_ExternalIdUniqueIndex_RejectsDuplicateAgainstRealPostgres()
+    {
+        await using var context = await CreateMigratedContextAsync();
+
+        var suffix = Guid.NewGuid().ToString("N");
+        var track1 = new Track { Title = $"Track 1 {suffix}" };
+        var track2 = new Track { Title = $"Track 2 {suffix}" };
+        var platform = await context.Platforms.FirstAsync();
+        context.AddRange(track1, track2);
+        context.ProviderLinks.Add(new ProviderLink { Track = track1, Platform = platform, ExternalId = suffix, ExternalUrl = new Uri($"https://example.com/{suffix}/1") });
+        await context.SaveChangesAsync();
+
+        context.ProviderLinks.Add(new ProviderLink { Track = track2, Platform = platform, ExternalId = suffix, ExternalUrl = new Uri($"https://example.com/{suffix}/2") });
+        var act = () => context.SaveChangesAsync();
+
+        await act.Should().ThrowAsync<DbUpdateException>();
+    }
+
+    [Fact]
     public async Task EntityGenre_CheckConstraint_RejectsAgainstRealPostgres()
     {
         await using var context = await CreateMigratedContextAsync();

@@ -1,6 +1,6 @@
 namespace Hodnota.Domain.Catalog;
 
-// Exactly one of ArtistId/ReleaseId/TrackId is set — see EntityGenreConfiguration.
+// Exactly one of ArtistId/ReleaseId/TrackId is set — polymorphic.
 public sealed class EntityGenre
 {
     public Guid Id { get; set; }

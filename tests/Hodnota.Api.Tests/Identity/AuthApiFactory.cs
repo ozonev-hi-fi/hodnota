@@ -1,4 +1,5 @@
 using Hodnota.Infrastructure;
+using Hodnota.Infrastructure.Providers.YouTube;
 
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -31,6 +32,9 @@ public sealed class AuthApiFactory : WebApplicationFactory<Program>
         [
             new KeyValuePair<string, string?>(DatabaseConfiguration.ProviderConfigKey, DatabaseConfiguration.SqliteProviderName),
             new KeyValuePair<string, string?>($"ConnectionStrings:{DatabaseConfiguration.ConnectionStringName}", _connectionString),
+            // Program.cs resolves YouTubeService eagerly at startup — a placeholder value is enough,
+            // since this factory never calls YouTubeService's real methods, only constructs it.
+            new KeyValuePair<string, string?>(YouTubeConfiguration.ApiKeyConfigKey, "test-key"),
         ]));
 
     protected override void Dispose(bool disposing)

@@ -34,11 +34,7 @@ public sealed class ProviderLinkConfiguration : IEntityTypeConfiguration<Provide
 
         builder.ToTable(t => t.HasCheckConstraint(
             "CK_ProviderLink_ExactlyOneTarget",
-            """
-            (CASE WHEN "ArtistId" IS NOT NULL THEN 1 ELSE 0 END) +
-            (CASE WHEN "ReleaseId" IS NOT NULL THEN 1 ELSE 0 END) +
-            (CASE WHEN "TrackId" IS NOT NULL THEN 1 ELSE 0 END) = 1
-            """));
+            ExactlyOneTargetCheckConstraint.Sql("ArtistId", "ReleaseId", "TrackId")));
 
         builder.HasIndex(x => new { x.PlatformId, x.ArtistId })
             .IsUnique()
@@ -51,5 +47,7 @@ public sealed class ProviderLinkConfiguration : IEntityTypeConfiguration<Provide
         builder.HasIndex(x => new { x.PlatformId, x.TrackId })
             .IsUnique()
             .HasFilter("\"TrackId\" IS NOT NULL");
+
+        builder.HasIndex(x => new { x.PlatformId, x.ExternalId }).IsUnique();
     }
 }
