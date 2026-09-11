@@ -51,6 +51,20 @@ public class OpenApiEndpointsTests(AuthApiFactory factory) : IClassFixture<AuthA
         operation.TryGetProperty("security", out var security).Should().Be(requiresAuth);
     }
 
+    [Theory]
+    [InlineData("/api/catalog/search", true)]
+    [InlineData("/api/catalog/resolve", true)]
+    [InlineData("/api/catalog/sharepages/{id}", false)]
+    public async Task Document_DeclaresBearerRequirement_OnlyForAuthorizedCatalogEndpoints(string path, bool requiresAuth)
+    {
+        using var document = await FetchOpenApiDocumentAsync();
+
+        var pathItem = document.RootElement.GetProperty("paths").GetProperty(path);
+        var operation = pathItem.EnumerateObject().First().Value;
+
+        operation.TryGetProperty("security", out var security).Should().Be(requiresAuth);
+    }
+
     private async Task<JsonDocument> FetchOpenApiDocumentAsync()
     {
         var response = await _client.GetStreamAsync("/openapi/v1.json");

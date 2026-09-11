@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 
-namespace Hodnota.Infrastructure.Identity;
+namespace Hodnota.Infrastructure;
 
 public sealed class ApplicationDbContextFactory : IDesignTimeDbContextFactory<ApplicationDbContext>
 {
@@ -9,10 +9,6 @@ public sealed class ApplicationDbContextFactory : IDesignTimeDbContextFactory<Ap
     {
         DotEnvLoader.LoadIfPresent();
 
-        // Reads the environment variable directly, not via IConfiguration/appsettings.json — dotnet-ef
-        // tooling only ever gets its connection string from .env/the environment, by design (see
-        // docs/decisions/0005-auth-identity.md). Setting ConnectionStrings:Default in an appsettings.*.json
-        // has no effect here.
         var connectionString = Environment.GetEnvironmentVariable($"ConnectionStrings__{DatabaseConfiguration.ConnectionStringName}");
         if (string.IsNullOrEmpty(connectionString))
         {

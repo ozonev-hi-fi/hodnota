@@ -3,7 +3,6 @@ using AwesomeAssertions;
 using Hodnota.Application.Catalog;
 using Hodnota.Domain.Catalog;
 using Hodnota.Infrastructure.Catalog;
-using Hodnota.Infrastructure.Identity;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -149,5 +148,63 @@ public class EfCatalogRepositoryTests
         sharePageResult.Type.Should().Be(StreamingResultType.Release);
         (await context.Releases.CountAsync()).Should().Be(1);
         (await context.Tracks.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task GetSharePageAsync_WithExistingId_ReturnsSharePageWithPlatformType()
+    {
+        var (connection, context) = await CreateContextAsync();
+        await using var _ = connection;
+        await using var __ = context;
+        var repository = new EfCatalogRepository(context);
+        var created = await repository.CreateSharePageAsync(NewTrackResult(), CancellationToken.None);
+
+        var result = await repository.GetSharePageAsync(created.Id, CancellationToken.None);
+
+        result.Should().NotBeNull();
+        result!.Name.Should().Be("Nothing Else Matters");
+        result.ArtistName.Should().Be("Metallica");
+        result.Links.Should().HaveCount(2);
+        result.Links.Should().OnlyContain(l => l.PlatformType == PlatformType.StreamingService);
+    }
+
+    [Fact]
+    public async Task GetSharePageAsync_WithUnknownId_ReturnsNull()
+    {
+        var (connection, context) = await CreateContextAsync();
+        await using var _ = connection;
+        await using var __ = context;
+        var repository = new EfCatalogRepository(context);
+
+        var result = await repository.GetSharePageAsync(Guid.NewGuid(), CancellationToken.None);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetSharePageAsync_ExcludesHiddenLinks_AndOrdersByDisplayOrder()
+    {
+        var (connection, context) = await CreateContextAsync();
+        await using var _ = connection;
+        await using var __ = context;
+        var repository = new EfCatalogRepository(context);
+        var created = await repository.CreateSharePageAsync(NewTrackResult(), CancellationToken.None);
+        var links = await context.SharePageLinks.Include(l => l.ProviderLink).ThenInclude(pl => pl.Platform)
+            .Where(l => l.SharePageId == created.Id).ToListAsync();
+        var youTubeLink = links.Single(l => l.ProviderLink.Platform.Code == PlatformCodes.YouTube);
+        var youTubeMusicLink = links.Single(l => l.ProviderLink.Platform.Code == PlatformCodes.YouTubeMusic);
+        youTubeLink.DisplayOrder = 1;
+        youTubeMusicLink.DisplayOrder = 0;
+        youTubeMusicLink.IsVisible = false;
+        await context.SaveChangesAsync();
+        // Filtered Include runs its WHERE clause in SQL, but EF's navigation fixup would otherwise
+        // attach the already-tracked (now-hidden) link back onto the result via the change tracker's
+        // identity map regardless of the filter — clear it so this test exercises the real SQL filter.
+        context.ChangeTracker.Clear();
+
+        var result = await repository.GetSharePageAsync(created.Id, CancellationToken.None);
+
+        result!.Links.Should().ContainSingle();
+        result.Links[0].PlatformCode.Should().Be(PlatformCodes.YouTube);
     }
 }

@@ -2,7 +2,6 @@ using AwesomeAssertions;
 
 using Hodnota.Domain.Catalog;
 using Hodnota.Infrastructure.Catalog;
-using Hodnota.Infrastructure.Identity;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;

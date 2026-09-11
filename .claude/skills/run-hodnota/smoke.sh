@@ -30,6 +30,10 @@ echo "Starting local dev Postgres..."
 docker compose up -d
 
 echo "Launching Hodnota.Api on $BASE_URL (log: $LOG_FILE)..."
+# hodnota_agent, not the developer's own `hodnota` database — see docker/postgres-init/ and the
+# skill's Cleanup section. A real env var beats .env/.env.local (DotEnvLoader loads both with
+# NoClobber), so this needs no file changes.
+export ConnectionStrings__Default="Host=localhost;Port=5433;Database=hodnota_agent;Username=hodnota;Password=hodnota"
 (cd src/Hodnota.Api && ASPNETCORE_ENVIRONMENT=Development nohup dotnet run --no-launch-profile --urls "$BASE_URL" >"$LOG_FILE" 2>&1 &)
 
 echo "Waiting for readiness..."
@@ -60,6 +64,15 @@ curl -sS -w '\nHTTP:%{http_code}\n' -X POST "$BASE_URL/api/auth/register" \
   -H "Content-Type: application/json" \
   -d "{\"email\":\"$email\",\"password\":\"$password\"}"
 
+echo "== confirm email =="
+sleep 1
+confirmation_query=$(grep "Confirmation link for $email" "$LOG_FILE" | tail -1 | grep -oE '\?userId=.*')
+if [ -z "$confirmation_query" ]; then
+  echo "No confirmation link found in $LOG_FILE for $email"
+  exit 1
+fi
+curl -sS -w '\nHTTP:%{http_code}\n' "$BASE_URL/api/auth/confirmEmail${confirmation_query}"
+
 echo "== login =="
 login_response=$(curl -sS -X POST "$BASE_URL/api/auth/login" \
   -H "Content-Type: application/json" \
@@ -78,6 +91,6 @@ curl -sS -w '\nHTTP:%{http_code}\n' -X POST "$BASE_URL/api/auth/refresh" \
   -d "{\"refreshToken\":\"$refresh_token\"}"
 
 echo "Cleaning up smoke-test user..."
-docker exec hodnota-postgres-1 psql -U hodnota -d hodnota -c "DELETE FROM \"AspNetUsers\" WHERE \"Email\" = '$email';" >/dev/null
+docker exec hodnota-postgres-1 psql -U hodnota -d hodnota_agent -c "DELETE FROM \"AspNetUsers\" WHERE \"Email\" = '$email';" >/dev/null
 
 echo "Smoke test passed."

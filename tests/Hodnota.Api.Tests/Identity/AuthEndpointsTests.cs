@@ -39,10 +39,24 @@ public class AuthEndpointsTests(AuthApiFactory factory) : IClassFixture<AuthApiF
     }
 
     [Fact]
-    public async Task Login_WithValidCredentials_ReturnsAccessToken()
+    public async Task Login_WithUnconfirmedEmail_ReturnsUnauthorizedWithNotAllowed()
     {
         var email = UniqueEmail();
         await _client.PostAsJsonAsync("/api/auth/register", new { email, password = Password });
+
+        var response = await _client.PostAsJsonAsync("/api/auth/login", new { email, password = Password });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        var body = await response.Content.ReadFromJsonAsync<ProblemDetailsResponse>();
+        body!.Detail.Should().Be("NotAllowed");
+    }
+
+    [Fact]
+    public async Task Login_WithConfirmedEmailAndValidCredentials_ReturnsAccessToken()
+    {
+        var email = UniqueEmail();
+        await _client.PostAsJsonAsync("/api/auth/register", new { email, password = Password });
+        await ConfirmEmailAsync();
 
         var response = await _client.PostAsJsonAsync("/api/auth/login", new { email, password = Password });
 
@@ -62,10 +76,23 @@ public class AuthEndpointsTests(AuthApiFactory factory) : IClassFixture<AuthApiF
     }
 
     [Fact]
+    public async Task ConfirmEmail_WithValidToken_AllowsSubsequentLogin()
+    {
+        var email = UniqueEmail();
+        await _client.PostAsJsonAsync("/api/auth/register", new { email, password = Password });
+
+        await ConfirmEmailAsync();
+        var response = await _client.PostAsJsonAsync("/api/auth/login", new { email, password = Password });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
     public async Task Refresh_WithValidRefreshToken_ReturnsNewAccessToken()
     {
         var email = UniqueEmail();
         await _client.PostAsJsonAsync("/api/auth/register", new { email, password = Password });
+        await ConfirmEmailAsync();
         var loginResponse = await _client.PostAsJsonAsync("/api/auth/login", new { email, password = Password });
         var tokens = await loginResponse.Content.ReadFromJsonAsync<AccessTokenResponse>();
 
@@ -79,5 +106,14 @@ public class AuthEndpointsTests(AuthApiFactory factory) : IClassFixture<AuthApiF
 
     private static string UniqueEmail() => $"{Guid.NewGuid():N}@example.com";
 
+    private async Task ConfirmEmailAsync()
+    {
+        var link = factory.EmailSender.LastConfirmationLink ?? throw new InvalidOperationException("No confirmation link was captured.");
+        var response = await _client.GetAsync(new Uri(link).PathAndQuery);
+        response.EnsureSuccessStatusCode();
+    }
+
     private sealed record AccessTokenResponse(string TokenType, string AccessToken, int ExpiresIn, string RefreshToken);
+
+    private sealed record ProblemDetailsResponse(string? Detail);
 }

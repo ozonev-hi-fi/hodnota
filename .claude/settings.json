@@ -1,5 +1,10 @@
 {
   "permissions": {
+    "allow": [
+      "Bash(npm ci *)",
+      "Bash(tasklist)",
+      "Bash(npm run *)"
+    ],
     "deny": [
       "Read(.env)",
       "Read(.env.local)",
@@ -9,6 +14,20 @@
       "Write(.env.local)",
       "Bash(cat .env)",
       "Bash(cat .env.local)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/check-adr-comment.js",
+            "statusMessage": "Checking for ADR-duplicating comments..."
+          }
+        ]
+      }
     ]
   }
 }
