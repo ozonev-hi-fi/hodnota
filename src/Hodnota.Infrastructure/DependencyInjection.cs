@@ -51,7 +51,7 @@ public static class DependencyInjection
     private static IServiceCollection AddAuth(this IServiceCollection services)
     {
         services
-            .AddIdentityApiEndpoints<ApplicationUser>(options => options.SignIn.RequireConfirmedAccount = false)
+            .AddIdentityApiEndpoints<ApplicationUser>(options => options.SignIn.RequireConfirmedAccount = true)
             .AddRoles<IdentityRole<Guid>>()
             .AddEntityFrameworkStores<ApplicationDbContext>();
 
@@ -77,7 +77,7 @@ public static class DependencyInjection
         services.AddScoped<IStreamingProvider, YouTubeStreamingProvider>();
         services.AddScoped<ICatalogRepository, EfCatalogRepository>();
         services.AddScoped<CatalogSearchService>();
-        services.AddScoped<SharePageCreationService>();
+        services.AddScoped<SharePageService>();
 
         return services;
     }

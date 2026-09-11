@@ -1,13 +1,17 @@
 using Hodnota.Application.Catalog;
 using Hodnota.Contracts.Catalog;
 
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Hodnota.Api.Catalog;
 
 [ApiController]
 [Route("api/catalog")]
-public sealed class CatalogController(CatalogSearchService searchService, SharePageCreationService sharePageService) : ControllerBase
+[Authorize]
+public sealed class CatalogController(
+    CatalogSearchService searchService,
+    SharePageService sharePageService) : ControllerBase
 {
     [HttpPost("search")]
     public async Task<ActionResult<IReadOnlyList<SearchCandidateResponse>>> Search(SearchRequest request, CancellationToken cancellationToken)
@@ -30,6 +34,15 @@ public sealed class CatalogController(CatalogSearchService searchService, ShareP
     public async Task<ActionResult<SharePageResponse>> Resolve(ResolveRequest request, CancellationToken cancellationToken)
     {
         var result = await sharePageService.ResolveAsync(request.Id, cancellationToken);
+
+        return result is null ? NotFound() : Ok(result.ToResponse());
+    }
+
+    [HttpGet("sharepages/{id:guid}")]
+    [AllowAnonymous]
+    public async Task<ActionResult<SharePageResponse>> GetSharePage(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await sharePageService.GetAsync(id, cancellationToken);
 
         return result is null ? NotFound() : Ok(result.ToResponse());
     }

@@ -1,10 +1,14 @@
 using Hodnota.Infrastructure;
+using Hodnota.Infrastructure.Identity;
 using Hodnota.Infrastructure.Providers.YouTube;
 
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Hodnota.Api.Tests.Identity;
 
@@ -20,6 +24,8 @@ public sealed class AuthApiFactory : WebApplicationFactory<Program>
 
     private readonly SqliteConnection _keepAliveConnection;
 
+    public CapturingEmailSender EmailSender { get; } = new();
+
     public AuthApiFactory()
     {
         // Sync is fine: in-memory SQLite has no real I/O, and constructors can't be async anyway.
@@ -27,7 +33,8 @@ public sealed class AuthApiFactory : WebApplicationFactory<Program>
         _keepAliveConnection.Open();
     }
 
-    protected override void ConfigureWebHost(IWebHostBuilder builder) =>
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
         builder.ConfigureAppConfiguration((_, configBuilder) => configBuilder.AddInMemoryCollection(
         [
             new KeyValuePair<string, string?>(DatabaseConfiguration.ProviderConfigKey, DatabaseConfiguration.SqliteProviderName),
@@ -36,6 +43,13 @@ public sealed class AuthApiFactory : WebApplicationFactory<Program>
             // since this factory never calls YouTubeService's real methods, only constructs it.
             new KeyValuePair<string, string?>(YouTubeConfiguration.ApiKeyConfigKey, "test-key"),
         ]));
+
+        builder.ConfigureServices(services =>
+        {
+            services.RemoveAll<IEmailSender<ApplicationUser>>();
+            services.AddSingleton<IEmailSender<ApplicationUser>>(EmailSender);
+        });
+    }
 
     protected override void Dispose(bool disposing)
     {

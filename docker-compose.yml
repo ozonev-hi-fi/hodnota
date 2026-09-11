@@ -10,6 +10,7 @@ services:
       - "${POSTGRES_PORT}:5432"
     volumes:
       - hodnota-postgres-data:/var/lib/postgresql
+      - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
 
 volumes:
   hodnota-postgres-data:

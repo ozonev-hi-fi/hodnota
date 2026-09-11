@@ -1,8 +1,11 @@
+using Hodnota.Api.Tests.Identity;
 using Hodnota.Application.Catalog;
 using Hodnota.Infrastructure;
+using Hodnota.Infrastructure.Identity;
 using Hodnota.Infrastructure.Providers.YouTube;
 
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
@@ -28,6 +31,8 @@ public sealed class CatalogApiFactory : WebApplicationFactory<Program>
 
     public StubStreamingProvider StreamingProvider { get; } = new();
 
+    public CapturingEmailSender EmailSender { get; } = new();
+
     public CatalogApiFactory()
     {
         _keepAliveConnection = new SqliteConnection(_connectionString);
@@ -47,6 +52,8 @@ public sealed class CatalogApiFactory : WebApplicationFactory<Program>
         {
             services.RemoveAll<IStreamingProvider>();
             services.AddSingleton<IStreamingProvider>(StreamingProvider);
+            services.RemoveAll<IEmailSender<ApplicationUser>>();
+            services.AddSingleton<IEmailSender<ApplicationUser>>(EmailSender);
         });
     }
 

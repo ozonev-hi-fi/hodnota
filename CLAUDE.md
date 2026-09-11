@@ -26,3 +26,9 @@ Small/routine tasks skip the decision doc and go straight to a branch, per [docs
 Every feature big enough to need a decision doc ships with one, permanently linkable from the PR. That changes the bar for an inline comment: don't restate a design decision, its rationale, or its rejected alternatives in code when the ADR already covers it — link to the ADR from the PR/commit, not from a comment, and trust a reader to open it. This is on top of the general "why, not what" comment rule: no comment that's obvious from the code, the tests, or the relevant ADR.
 
 Property/column meaning that isn't obvious from its name (what a field represents, not why it's shaped that way) is documentation, not a design-decision comment — prefer a `[Description("...")]` attribute on the member over a `//` comment for that, so it stays attached to the type for any future self-documentation/reflection use, not just readers of the source file.
+
+## Manual verification leaves permanent data — reset it before finishing
+
+The local dev Postgres container persists across restarts by design (see [docs/architecture.md](docs/architecture.md)'s Database section) — it is not wiped between sessions. Registering a user, running a search, or any other manual/ad hoc verification against it (via curl, the browser, or otherwise) leaves real rows behind. Automated tests never hit this database (SQLite in-memory or Testcontainers, per [decisions/0005](docs/decisions/0005-auth-identity.md)), so this only applies to manual verification.
+
+Agent-driven manual verification must target `hodnota_agent`, never the developer's own `hodnota` database — see the `run-hodnota` skill for the connection-string override and its Cleanup step. Never run `docker compose down -v` to clean up: it wipes the whole volume, including the developer's own persistent data.

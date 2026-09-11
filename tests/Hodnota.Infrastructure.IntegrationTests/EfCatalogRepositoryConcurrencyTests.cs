@@ -3,7 +3,6 @@ using AwesomeAssertions;
 using Hodnota.Application.Catalog;
 using Hodnota.Domain.Catalog;
 using Hodnota.Infrastructure.Catalog;
-using Hodnota.Infrastructure.Identity;
 
 using Microsoft.EntityFrameworkCore;
 

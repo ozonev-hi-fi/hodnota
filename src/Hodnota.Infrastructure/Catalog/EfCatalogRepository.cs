@@ -1,6 +1,5 @@
 using Hodnota.Application.Catalog;
 using Hodnota.Domain.Catalog;
-using Hodnota.Infrastructure.Identity;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -21,8 +20,6 @@ public sealed class EfCatalogRepository(ApplicationDbContext dbContext) : ICatal
         }
         catch (DbUpdateException ex) when (IsProviderLinkExternalIdConflict(ex))
         {
-            // A concurrent resolve for the same external ID committed first, tripping the unique index
-            // between our lookup and our insert — retry once so the now-committed row is found and reused.
             dbContext.ChangeTracker.Clear();
             return await CreateSharePageCoreAsync(result, cancellationToken);
         }
@@ -64,7 +61,37 @@ public sealed class EfCatalogRepository(ApplicationDbContext dbContext) : ICatal
             result.Type,
             resolution.Name,
             resolution.ArtistName,
-            [.. resolution.ProviderLinks.Select(pl => new SharePageLinkResult(pl.Platform.Code, pl.ExternalUrl))]);
+            [.. resolution.ProviderLinks.Select(pl => new SharePageLinkResult(pl.Platform.Code, pl.ExternalUrl, pl.Platform.Type))]);
+    }
+
+    public async Task<SharePageResult?> GetSharePageAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var sharePage = await dbContext.SharePages
+            .Include(sp => sp.Links.Where(l => l.IsVisible).OrderBy(l => l.DisplayOrder))
+            .ThenInclude(l => l.ProviderLink)
+            .ThenInclude(pl => pl.Platform)
+            .Include(sp => sp.Track!.Credits.Where(c => c.Role == CreditRole.MainArtist))
+            .ThenInclude(c => c.Artist)
+            .Include(sp => sp.Release!.Credits.Where(c => c.Role == CreditRole.MainArtist))
+            .ThenInclude(c => c.Artist)
+            .FirstOrDefaultAsync(sp => sp.Id == id, cancellationToken);
+
+        if (sharePage is null)
+        {
+            return null;
+        }
+
+        var type = sharePage.TrackId is not null ? StreamingResultType.Track : StreamingResultType.Release;
+        var name = sharePage.Track?.Title ?? sharePage.Release!.Title;
+        var artistName = (sharePage.Track?.Credits ?? sharePage.Release!.Credits)
+            .First(c => c.Role == CreditRole.MainArtist).Artist.Name;
+
+        return new SharePageResult(
+            sharePage.Id,
+            type,
+            name,
+            artistName,
+            [.. sharePage.Links.Select(l => new SharePageLinkResult(l.ProviderLink.Platform.Code, l.ProviderLink.ExternalUrl, l.ProviderLink.Platform.Type))]);
     }
 
     private async Task<EntityResolution> ResolveTrackAsync(
