@@ -25,7 +25,7 @@ The web SPA holds both the access and refresh tokens in `localStorage`, behind a
 
 ## Hosting
 
-Needs to be free (or effectively free) to start. Candidates to evaluate: containerization, Azure's free tier(s). Must also consider scalability if the product gets traction, and baseline security posture (attack surface, data leak prevention, a kill switch, disaster-recovery scenarios kept up to date).
+Needs to be free (or effectively free) to start. Candidates to evaluate: containerization, Azure's free tier(s). Must also consider scalability if the product gets traction. Baseline security posture (attack surface, data leak prevention, a kill switch) and disaster-recovery planning are tracked as their own roadmap items once hosting is chosen, gating the move to real public users — see [roadmap.md](roadmap.md) and [decisions/0010](decisions/0010-uat-production-readiness-gate.md).
 
 ## Database
 
