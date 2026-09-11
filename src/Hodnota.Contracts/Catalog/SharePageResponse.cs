@@ -1,6 +1,18 @@
+using System.Text.Json.Serialization;
+
 namespace Hodnota.Contracts.Catalog;
 
-public sealed record SharePageLinkResponse(string Platform, Uri Url);
+[JsonConverter(typeof(JsonStringEnumConverter<PlatformType>))]
+public enum PlatformType
+{
+    StreamingService,
+    DigitalStore,
+    PhysicalStore,
+    Aggregator,
+    Database,
+}
+
+public sealed record SharePageLinkResponse(string Platform, Uri Url, PlatformType Type);
 
 public sealed record SharePageResponse(
     Guid Id,

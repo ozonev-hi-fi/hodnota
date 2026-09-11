@@ -6,7 +6,7 @@ using NSubstitute;
 
 namespace Hodnota.Application.Tests.Catalog;
 
-public class SharePageCreationServiceTests
+public class SharePageServiceTests
 {
     [Fact]
     public async Task ResolveAsync_UnknownCandidateId_ReturnsNull()
@@ -14,7 +14,7 @@ public class SharePageCreationServiceTests
         var cache = Substitute.For<ISearchCandidateCache>();
         cache.Get("missing").Returns((StreamingSearchResult?)null);
         var repository = Substitute.For<ICatalogRepository>();
-        var service = new SharePageCreationService(cache, repository);
+        var service = new SharePageService(cache, repository);
 
         var result = await service.ResolveAsync("missing", CancellationToken.None);
 
@@ -36,9 +36,23 @@ public class SharePageCreationServiceTests
         var expected = new SharePageResult(Guid.NewGuid(), StreamingResultType.Track, "Nothing Else Matters", "Metallica", []);
         var repository = Substitute.For<ICatalogRepository>();
         repository.CreateSharePageAsync(cachedResult, Arg.Any<CancellationToken>()).Returns(expected);
-        var service = new SharePageCreationService(cache, repository);
+        var service = new SharePageService(cache, repository);
 
         var result = await service.ResolveAsync("candidate-1", CancellationToken.None);
+
+        result.Should().Be(expected);
+    }
+
+    [Fact]
+    public async Task GetAsync_DelegatesToRepository()
+    {
+        var id = Guid.NewGuid();
+        var expected = new SharePageResult(id, StreamingResultType.Track, "Nothing Else Matters", "Metallica", []);
+        var repository = Substitute.For<ICatalogRepository>();
+        repository.GetSharePageAsync(id, Arg.Any<CancellationToken>()).Returns(expected);
+        var service = new SharePageService(Substitute.For<ISearchCandidateCache>(), repository);
+
+        var result = await service.GetAsync(id, CancellationToken.None);
 
         result.Should().Be(expected);
     }

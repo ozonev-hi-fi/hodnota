@@ -1,19 +1,19 @@
 using System.Net;
 
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace Hodnota.Infrastructure.Identity;
 
 // Logs the link instead of sending it, until the "Integrate email service" roadmap item lands.
-public sealed partial class NoOpEmailSender(ILogger<NoOpEmailSender> logger) : IEmailSender<ApplicationUser>
+public sealed partial class NoOpEmailSender(ILogger<NoOpEmailSender> logger, IConfiguration configuration) : IEmailSender<ApplicationUser>
 {
     public Task SendConfirmationLinkAsync(ApplicationUser user, string email, string confirmationLink)
     {
-        // MapIdentityApi HTML-encodes this link (it's meant for an HTML email body), turning "&" between
-        // query params into "&amp;" — copy-pasted as-is, the query-string parser reads a param literally
-        // named "amp;code" instead of "code". Decode it since this sender's whole point is copy-paste testing.
-        LogConfirmationLink(logger, email, WebUtility.HtmlDecode(confirmationLink));
+        var decodedLink = WebUtility.HtmlDecode(confirmationLink);
+        LogConfirmationLink(logger, email, ToWebAppConfirmationLink(decodedLink));
         return Task.CompletedTask;
     }
 
@@ -27,6 +27,23 @@ public sealed partial class NoOpEmailSender(ILogger<NoOpEmailSender> logger) : I
     {
         LogPasswordResetCode(logger, email, resetCode);
         return Task.CompletedTask;
+    }
+
+    private string ToWebAppConfirmationLink(string apiConfirmationLink)
+    {
+        var query = QueryHelpers.ParseQuery(new Uri(apiConfirmationLink).Query);
+        var parameters = new Dictionary<string, string?>
+        {
+            ["userId"] = query["userId"].ToString(),
+            ["code"] = query["code"].ToString(),
+        };
+        if (query.TryGetValue("changedEmail", out var changedEmail))
+        {
+            parameters["changedEmail"] = changedEmail.ToString();
+        }
+
+        var webAppBaseUrl = configuration[WebAppConfiguration.BaseUrlConfigKey] ?? WebAppConfiguration.DefaultBaseUrl;
+        return QueryHelpers.AddQueryString($"{webAppBaseUrl.TrimEnd('/')}/confirm-email", parameters);
     }
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Confirmation link for {Email}: {ConfirmationLink}")]

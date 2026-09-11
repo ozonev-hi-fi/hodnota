@@ -8,7 +8,8 @@ public sealed class BearerAuthOperationTransformer : IOpenApiOperationTransforme
 {
     public Task TransformAsync(OpenApiOperation operation, OpenApiOperationTransformerContext context, CancellationToken cancellationToken)
     {
-        var requiresAuth = context.Description.ActionDescriptor.EndpointMetadata.OfType<IAuthorizeData>().Any();
+        var metadata = context.Description.ActionDescriptor.EndpointMetadata;
+        var requiresAuth = metadata.OfType<IAuthorizeData>().Any() && !metadata.OfType<AllowAnonymousAttribute>().Any();
         if (!requiresAuth)
         {
             return Task.CompletedTask;

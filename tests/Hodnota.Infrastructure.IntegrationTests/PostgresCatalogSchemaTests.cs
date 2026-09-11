@@ -2,15 +2,11 @@ using AwesomeAssertions;
 
 using Hodnota.Domain.Catalog;
 using Hodnota.Infrastructure.Catalog;
-using Hodnota.Infrastructure.Identity;
 
 using Microsoft.EntityFrameworkCore;
 
 namespace Hodnota.Infrastructure.IntegrationTests;
 
-// Re-verifies the constraints ApplicationDbContextCatalogTests already checks against SQLite, but
-// against real Postgres — per this project's rule that schema-changing features need a real-DB
-// pass, not SQLite-only sign-off. See docs/decisions/0007-catalog-data-model.md.
 public class PostgresCatalogSchemaTests(PostgresContainerFixture fixture) : IClassFixture<PostgresContainerFixture>
 {
     private async Task<ApplicationDbContext> CreateMigratedContextAsync()
