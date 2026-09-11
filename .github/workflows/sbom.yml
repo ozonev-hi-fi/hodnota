@@ -45,7 +45,7 @@ jobs:
 
       - run: npm ci
 
-      - run: npx @cyclonedx/cyclonedx-npm --output-file web-bom.json
+      - run: npx @cyclonedx/cyclonedx-npm --ignore-npm-errors --output-file web-bom.json
 
       - uses: actions/upload-artifact@v4
         with:
