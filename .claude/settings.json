@@ -3,7 +3,9 @@
     "allow": [
       "Bash(npm ci *)",
       "Bash(tasklist)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(git checkout *)",
+      "Bash(git pull *)"
     ],
     "deny": [
       "Read(.env)",

@@ -12,7 +12,14 @@ Epic-level plan, checked off as things get done. Task-level work doesn't belong 
 - [x] Add CI security/quality scanning (SAST, SCA, SBOM, license gate) — CodeQL, Dependency Review, CycloneDX SBOM, Dependabot — see [decisions/0008](decisions/0008-youtube-search-sharepage-skeleton.md). SonarCloud was dropped (advertised free tier requires payment details in practice); code smell/duplication coverage is an explicitly open gap. Repo-settings toggles (secret scanning, push protection, Dependabot alerts) still need manual follow-up (see ADR Consequences).
 - [x] Implement auth UI (Web) — register/login/forgot-password/email-confirmation/change-password screens against the Identity API, the search/results page consuming `/api/catalog`, and the share page (folded in from `SharePage`'s backend-only landing in [decisions/0008](decisions/0008-youtube-search-sharepage-skeleton.md)) — see [decisions/0009](decisions/0009-auth-ui-search-share-web.md).
 - [x] Implement a first streaming provider — YouTube search + SharePage creation, backend only (no UI) — see [decisions/0008](decisions/0008-youtube-search-sharepage-skeleton.md). Originally scoped as an "end-to-end walking skeleton"; descoped to API+DB only once in progress, with the UI half moved to the item above instead.
-- [ ] Implement the remaining first-release providers
+- [ ] Implement the remaining first-release providers — separate feature branch per provider, merged to `develop` one at a time; expect one shared ADR covering the common decisions across them (most of the per-provider architecture — endpoint style, catalog dedup, temp-candidate caching — was already settled in [decisions/0008](decisions/0008-youtube-search-sharepage-skeleton.md)), written when work on the first of these starts, not preemptively.
+  - [ ] Spotify
+  - [ ] Qobuz
+  - [ ] Tidal
+  - [ ] Deezer
+  - [ ] Apple Music
+  - [ ] Bandcamp — selling platform with limited preview playback (1-2 plays/track); not a full `IStreamingProvider`, but still produces a shareable link. Interface shape decided when this item is picked up.
+  - [ ] Discogs — metadata/database + marketplace hybrid, no full playback (some samples only); not a full `IStreamingProvider`, but still produces a shareable link to the artist/release page. Interface shape decided when this item is picked up.
 - [ ] Add observability: structured logging conventions + basic error/crash alerting — no dependency on the hosting choice below; a documentation gap surfaced by an SDLC audit, see [decisions/0010](decisions/0010-uat-production-readiness-gate.md).
 - [ ] Choose and add a `LICENSE` file — before first real release/deployment, not before (repo is public now with no LICENSE, which defaults to "all rights reserved" — the safe side of the ambiguity, so no urgency). Goal is source-available but restricted against commercial use by others, not necessarily OSI-approved "open source" — plain AGPL-3.0 doesn't fit since it still permits commercial use (only requires sharing modifications). Candidates being weighed, decision still open: CC BY-NC-SA 4.0 (Creative Commons explicitly advises against using CC licenses for software — no patent handling, poor fit), PolyForm Noncommercial (built for source-available non-commercial software), Business Source License/BUSL (time-delimited commercial-use restriction that converts to a real OSS license later — used by MariaDB, Sentry, CockroachDB; may suit a scenario where investors/commercialization enter the picture later).
 - [ ] Figure out hosting — must be free (or effectively free) to start.
@@ -21,6 +28,14 @@ Epic-level plan, checked off as things get done. Task-level work doesn't belong 
 - [ ] Use email service for auth confirmation flows — also a practical prerequisite for UAT itself (see below), since `RequireConfirmedAccount = true` blocks any invited tester from confirming an account without it.
 - [ ] Define UAT / production-readiness gate — privacy policy published + human security review (incl. CSP, secure headers, secure cookie attributes if token storage ever moves off `localStorage`) as acceptance criteria before opening real public registration; see [decisions/0010](decisions/0010-uat-production-readiness-gate.md).
 - [ ] Implement auth (Google/Facebook external login)
-- [ ] Third-party streaming-API terms-of-service review (YouTube, Qobuz, Tidal, Deezer, Apple Music, Bandcamp) — deliberately after the UAT gate above, non-blocking for a non-commercial pre-release project, see [decisions/0010](decisions/0010-uat-production-readiness-gate.md).
+- [ ] Third-party streaming-API terms-of-service review (YouTube, Spotify, Qobuz, Tidal, Deezer, Apple Music, Bandcamp, Discogs) — deliberately after the UAT gate above, non-blocking for a non-commercial pre-release project, see [decisions/0010](decisions/0010-uat-production-readiness-gate.md). Spotify and Discogs added to this list after ADR 0010 was accepted — the ADR's own provider enumeration reflects the roster at the time and is left as historical record.
 - [ ] Sketch/scaffold the MAUI mobile app
 - [ ] Implement auth UI (Mobile)
+
+## Unscheduled placeholders
+
+Called out from [architecture.md](architecture.md) but not yet sequenced above — revisit and slot into the main list once there's a concrete reason to prioritize them.
+
+- [ ] Multiple UI/UX themes (dark, light, MS-DOS-style, ...) — see [architecture.md](architecture.md)'s UX Notes section.
+- [ ] Localization support (API, Web UI, Mobile) — see [architecture.md](architecture.md)'s UX Notes section.
+- [ ] Define source-of-truth authority order for catalog data enrichment across providers (which provider wins when two disagree on an artist name, release date, etc., during catalog sync — see [decisions/0007](decisions/0007-catalog-data-model.md) and [decisions/0008](decisions/0008-youtube-search-sharepage-skeleton.md)'s exact-match dedup, which this extends). Working hypothesis, not yet decided: Discogs as the top authority for release/artist metadata correctness; YouTube or Spotify (undecided which) as the top authority for initial search relevance.

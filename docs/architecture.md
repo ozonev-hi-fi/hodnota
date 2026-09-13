@@ -68,10 +68,11 @@ Latest-stable-everything version policy; `hodnota.slnx` at repo root with one ce
 ## Supported Streaming Services — First Release (priority order)
 
 1. YouTube + YouTube Music
-2. Qobuz
-3. Tidal
-4. Deezer
-5. Apple Music
+2. Spotify
+3. Qobuz
+4. Tidal
+5. Deezer
+6. Apple Music
 
 ### Purchase Platforms
 
