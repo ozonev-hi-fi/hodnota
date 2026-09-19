@@ -2,53 +2,124 @@ using AwesomeAssertions;
 
 using Hodnota.Application.Catalog;
 
+using Microsoft.Extensions.Logging.Abstractions;
+
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 
 namespace Hodnota.Application.Tests.Catalog;
 
 public class CatalogSearchServiceTests
 {
-    private static StreamingSearchResult NewResult(string name) => new(
+    private static StreamingSearchResult NewResult(string name, string platformCode = "youtube") => new(
         StreamingResultType.Track,
         name,
         "Artist",
         null,
-        [new ProviderLinkCandidate("youtube", "id", new Uri("https://example.com"))]);
+        [new ProviderLinkCandidate(platformCode, name, new Uri("https://example.com"))]);
 
-    [Fact]
-    public async Task SearchAsync_StoresEachResultInCacheAndReturnsItsCandidateId()
+    private static IStreamingProvider NewProvider(string providerCode)
     {
         var provider = Substitute.For<IStreamingProvider>();
+        provider.ProviderCode.Returns(providerCode);
+        return provider;
+    }
+
+    [Fact]
+    public async Task SearchAsync_StoresEachMergedResultInCacheAndReturnsItsCandidateId()
+    {
+        var provider = NewProvider(ProviderCodes.YouTube);
         var results = new List<StreamingSearchResult> { NewResult("Song 1"), NewResult("Song 2") };
         provider.SearchAsync("nothing", Arg.Any<CancellationToken>()).Returns(results);
         var cache = Substitute.For<ISearchCandidateCache>();
         cache.Store(Arg.Any<StreamingSearchResult>()).Returns("id-1", "id-2");
-        var service = new CatalogSearchService([provider], cache);
+        var service = new CatalogSearchService([provider], cache, NullLogger<CatalogSearchService>.Instance);
 
         var candidates = await service.SearchAsync("nothing", CancellationToken.None);
 
         candidates.Should().HaveCount(2);
         candidates[0].CandidateId.Should().Be("id-1");
-        candidates[0].Result.Should().Be(results[0]);
+        candidates[0].Result.Should().BeEquivalentTo(results[0]);
         candidates[1].CandidateId.Should().Be("id-2");
-        candidates[1].Result.Should().Be(results[1]);
+        candidates[1].Result.Should().BeEquivalentTo(results[1]);
     }
 
     [Fact]
-    public async Task SearchAsync_MergesResultsFromAllRegisteredProviders()
+    public async Task SearchAsync_ResultsFromDifferentProviders_AreMergedInTrustOrder()
     {
-        var providerA = Substitute.For<IStreamingProvider>();
-        providerA.SearchAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns([NewResult("From A")]);
-        var providerB = Substitute.For<IStreamingProvider>();
-        providerB.SearchAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns([NewResult("From B")]);
+        var youTube = NewProvider(ProviderCodes.YouTube);
+        youTube.SearchAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns([NewResult("From YouTube")]);
+        var spotify = NewProvider(ProviderCodes.Spotify);
+        spotify.SearchAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns([NewResult("From Spotify")]);
         var cache = Substitute.For<ISearchCandidateCache>();
         cache.Store(Arg.Any<StreamingSearchResult>()).Returns("id");
-        var service = new CatalogSearchService([providerA, providerB], cache);
+        // Registered YouTube-first deliberately, so this proves trust-order sorting, not registration order.
+        var service = new CatalogSearchService([youTube, spotify], cache, NullLogger<CatalogSearchService>.Instance);
 
         var candidates = await service.SearchAsync("query", CancellationToken.None);
 
-        candidates.Should().HaveCount(2);
-        candidates.Select(c => c.Result.Name).Should().BeEquivalentTo(["From A", "From B"]);
+        candidates.Select(c => c.Result.Name).Should().Equal("From Spotify", "From YouTube");
+    }
+
+    [Fact]
+    public async Task SearchAsync_OneProviderThrows_StillReturnsTheOtherProvidersResults()
+    {
+        var failing = NewProvider(ProviderCodes.Spotify);
+        failing.SearchAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(new StreamingProviderException("boom", new InvalidOperationException()));
+        var working = NewProvider(ProviderCodes.YouTube);
+        working.SearchAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns([NewResult("Still here")]);
+        var cache = Substitute.For<ISearchCandidateCache>();
+        cache.Store(Arg.Any<StreamingSearchResult>()).Returns("id");
+        var service = new CatalogSearchService([failing, working], cache, NullLogger<CatalogSearchService>.Instance);
+
+        var candidates = await service.SearchAsync("query", CancellationToken.None);
+
+        candidates.Should().ContainSingle();
+        candidates[0].Result.Name.Should().Be("Still here");
+    }
+
+    [Fact]
+    public async Task SearchAsync_AllProvidersThrow_ThrowsStreamingProviderException()
+    {
+        var providerA = NewProvider(ProviderCodes.Spotify);
+        providerA.SearchAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(new StreamingProviderException("boom-a", new InvalidOperationException()));
+        var providerB = NewProvider(ProviderCodes.YouTube);
+        providerB.SearchAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(new StreamingProviderException("boom-b", new InvalidOperationException()));
+        var cache = Substitute.For<ISearchCandidateCache>();
+        var service = new CatalogSearchService([providerA, providerB], cache, NullLogger<CatalogSearchService>.Instance);
+
+        var act = () => service.SearchAsync("query", CancellationToken.None);
+
+        await act.Should().ThrowAsync<StreamingProviderException>();
+    }
+
+    [Fact]
+    public async Task SearchAsync_NoProvidersRegistered_ReturnsEmptyWithoutThrowing()
+    {
+        var cache = Substitute.For<ISearchCandidateCache>();
+        var service = new CatalogSearchService([], cache, NullLogger<CatalogSearchService>.Instance);
+
+        var candidates = await service.SearchAsync("query", CancellationToken.None);
+
+        candidates.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task SearchAsync_CallerCancels_PropagatesOperationCanceledException()
+    {
+        var provider = NewProvider(ProviderCodes.YouTube);
+        provider.SearchAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).ThrowsAsync(new OperationCanceledException());
+        var cache = Substitute.For<ISearchCandidateCache>();
+        var service = new CatalogSearchService([provider], cache, NullLogger<CatalogSearchService>.Instance);
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        var act = () => service.SearchAsync("query", cts.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
     }
 
     [Theory]
@@ -56,9 +127,9 @@ public class CatalogSearchServiceTests
     [InlineData("   ")]
     public async Task SearchAsync_BlankQuery_ReturnsEmptyWithoutCallingProviders(string query)
     {
-        var provider = Substitute.For<IStreamingProvider>();
+        var provider = NewProvider(ProviderCodes.YouTube);
         var cache = Substitute.For<ISearchCandidateCache>();
-        var service = new CatalogSearchService([provider], cache);
+        var service = new CatalogSearchService([provider], cache, NullLogger<CatalogSearchService>.Instance);
 
         var candidates = await service.SearchAsync(query, CancellationToken.None);
 

@@ -5,7 +5,17 @@
       "Bash(tasklist)",
       "Bash(npm run *)",
       "Bash(git checkout *)",
-      "Bash(git pull *)"
+      "Bash(git pull *)",
+      "Bash(docker compose *)",
+      "Bash(jobs -l)",
+      "Bash(dotnet tool *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5009/openapi/v1.json)",
+      "Bash(powershell -Command \"Get-NetTCPConnection -LocalPort 5009 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess | Sort-Object -Unique\")",
+      "Bash(powershell -Command \"Stop-Process -Id 18172 -Force -ErrorAction SilentlyContinue\")",
+      "Bash(docker exec *)",
+      "Bash(dotnet format *)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(echo \"FORMAT_EXIT: $?\")"
     ],
     "deny": [
       "Read(.env)",
@@ -16,6 +26,9 @@
       "Write(.env.local)",
       "Bash(cat .env)",
       "Bash(cat .env.local)"
+    ],
+    "additionalDirectories": [
+      "\\tmp"
     ]
   },
   "hooks": {

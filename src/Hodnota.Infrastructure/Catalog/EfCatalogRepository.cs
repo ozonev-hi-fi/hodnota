@@ -38,11 +38,12 @@ public sealed class EfCatalogRepository(ApplicationDbContext dbContext) : ICatal
             .Where(p => result.Links.Select(l => l.PlatformCode).Contains(p.Code))
             .ToDictionaryAsync(p => p.Code, cancellationToken);
 
-        var existingLink = await FindExistingProviderLinkAsync(result.Links, platformsByCode, cancellationToken);
+        var existingLinksByKey = await LoadExistingLinksAsync(result.Links, platformsByCode, cancellationToken);
+        var existingLink = FindExistingProviderLink(result.Links, platformsByCode, existingLinksByKey);
 
         var resolution = result.Type == StreamingResultType.Track
-            ? await ResolveTrackAsync(result, existingLink?.TrackId, platformsByCode, cancellationToken)
-            : await ResolveReleaseAsync(result, existingLink?.ReleaseId, platformsByCode, cancellationToken);
+            ? await ResolveTrackAsync(result, existingLink?.TrackId, platformsByCode, existingLinksByKey, cancellationToken)
+            : await ResolveReleaseAsync(result, existingLink?.ReleaseId, platformsByCode, existingLinksByKey, cancellationToken);
 
         var sharePage = result.Type == StreamingResultType.Track
             ? new SharePage { TrackId = resolution.EntityId }
@@ -98,46 +99,56 @@ public sealed class EfCatalogRepository(ApplicationDbContext dbContext) : ICatal
         StreamingSearchResult result,
         Guid? existingTrackId,
         IReadOnlyDictionary<string, Platform> platformsByCode,
+        IReadOnlyDictionary<(Guid PlatformId, string ExternalId), ProviderLink> existingLinksByKey,
         CancellationToken cancellationToken)
     {
         if (existingTrackId is { } trackId)
         {
             var title = await dbContext.Tracks.Where(t => t.Id == trackId).Select(t => t.Title).FirstAsync(cancellationToken);
-            var providerLinks = await FetchProviderLinksAsync(trackId: trackId, cancellationToken: cancellationToken);
+            var existingProviderLinks = await FetchProviderLinksAsync(trackId: trackId, cancellationToken: cancellationToken);
             var artistName = await GetMainArtistNameAsync(trackId: trackId, cancellationToken: cancellationToken);
-            return new EntityResolution(trackId, title, artistName, providerLinks);
+
+            var newLinks = CreateMissingProviderLinks(result.Links, platformsByCode, existingLinksByKey, trackId: trackId);
+            dbContext.ProviderLinks.AddRange(newLinks);
+
+            return new EntityResolution(trackId, title, artistName, [.. existingProviderLinks, .. newLinks]);
         }
 
         var artist = new Artist { Name = result.ArtistName };
         var track = new Track { Title = result.Name };
         dbContext.AddRange(artist, track, new ArtistCredit { Artist = artist, Track = track, Role = CreditRole.MainArtist });
-        var newLinks = CreateProviderLinks(result.Links, platformsByCode, track: track);
-        dbContext.ProviderLinks.AddRange(newLinks);
-        return new EntityResolution(track.Id, track.Title, artist.Name, newLinks);
+        var links = CreateMissingProviderLinks(result.Links, platformsByCode, existingLinksByKey, track: track);
+        dbContext.ProviderLinks.AddRange(links);
+        return new EntityResolution(track.Id, track.Title, artist.Name, links);
     }
 
     private async Task<EntityResolution> ResolveReleaseAsync(
         StreamingSearchResult result,
         Guid? existingReleaseId,
         IReadOnlyDictionary<string, Platform> platformsByCode,
+        IReadOnlyDictionary<(Guid PlatformId, string ExternalId), ProviderLink> existingLinksByKey,
         CancellationToken cancellationToken)
     {
         if (existingReleaseId is { } releaseId)
         {
             var title = await dbContext.Releases.Where(r => r.Id == releaseId).Select(r => r.Title).FirstAsync(cancellationToken);
-            var providerLinks = await FetchProviderLinksAsync(releaseId: releaseId, cancellationToken: cancellationToken);
+            var existingProviderLinks = await FetchProviderLinksAsync(releaseId: releaseId, cancellationToken: cancellationToken);
             var artistName = await GetMainArtistNameAsync(releaseId: releaseId, cancellationToken: cancellationToken);
-            return new EntityResolution(releaseId, title, artistName, providerLinks);
+
+            var newLinks = CreateMissingProviderLinks(result.Links, platformsByCode, existingLinksByKey, releaseId: releaseId);
+            dbContext.ProviderLinks.AddRange(newLinks);
+
+            return new EntityResolution(releaseId, title, artistName, [.. existingProviderLinks, .. newLinks]);
         }
 
         var artist = new Artist { Name = result.ArtistName };
-        // YouTube playlist search results carry no EP/Single/Compilation/Live signal — Album is the
-        // least-wrong default for "some kind of release", not a considered classification.
-        var release = new Release { Title = result.Name, Type = ReleaseType.Album };
+        // Least-wrong default for a provider that carries no release-type signal (e.g. a YouTube
+        // playlist). Spotify's album_type maps onto ReleaseType directly — see SpotifyStreamingProvider.
+        var release = new Release { Title = result.Name, Type = result.ReleaseType ?? ReleaseType.Album };
         dbContext.AddRange(artist, release, new ArtistCredit { Artist = artist, Release = release, Role = CreditRole.MainArtist });
-        var newLinks = CreateProviderLinks(result.Links, platformsByCode, release: release);
-        dbContext.ProviderLinks.AddRange(newLinks);
-        return new EntityResolution(release.Id, release.Title, artist.Name, newLinks);
+        var links = CreateMissingProviderLinks(result.Links, platformsByCode, existingLinksByKey, release: release);
+        dbContext.ProviderLinks.AddRange(links);
+        return new EntityResolution(release.Id, release.Title, artist.Name, links);
     }
 
     private async Task<List<ProviderLink>> FetchProviderLinksAsync(Guid? trackId = null, Guid? releaseId = null, CancellationToken cancellationToken = default)
@@ -154,21 +165,48 @@ public sealed class EfCatalogRepository(ApplicationDbContext dbContext) : ICatal
         (await dbContext.ArtistCredits.Include(ac => ac.Artist)
             .FirstAsync(ac => ac.Role == CreditRole.MainArtist && ac.TrackId == trackId && ac.ReleaseId == releaseId, cancellationToken)).Artist.Name;
 
-    private static List<ProviderLink> CreateProviderLinks(
+    private static List<ProviderLink> CreateMissingProviderLinks(
         IReadOnlyList<ProviderLinkCandidate> links,
         IReadOnlyDictionary<string, Platform> platformsByCode,
+        IReadOnlyDictionary<(Guid PlatformId, string ExternalId), ProviderLink> existingLinksByKey,
+        Guid? trackId = null,
+        Guid? releaseId = null,
         Track? track = null,
-        Release? release = null) =>
-        [.. links.Select(link => new ProviderLink
+        Release? release = null)
+    {
+        var newLinks = new List<ProviderLink>();
+        foreach (var link in links)
         {
-            Track = track,
-            Release = release,
-            Platform = GetPlatform(platformsByCode, link.PlatformCode),
-            ExternalId = link.ExternalId,
-            ExternalUrl = link.ExternalUrl,
-        })];
+            var platform = GetPlatform(platformsByCode, link.PlatformCode);
+            if (existingLinksByKey.ContainsKey((platform.Id, link.ExternalId)))
+            {
+                continue;
+            }
 
-    private async Task<ProviderLink?> FindExistingProviderLinkAsync(
+            newLinks.Add(new ProviderLink
+            {
+                TrackId = trackId,
+                ReleaseId = releaseId,
+                Track = track,
+                Release = release,
+                Platform = platform,
+                ExternalId = link.ExternalId,
+                ExternalUrl = link.ExternalUrl,
+            });
+        }
+
+        return newLinks;
+    }
+
+    private static ProviderLink? FindExistingProviderLink(
+        IReadOnlyList<ProviderLinkCandidate> links,
+        IReadOnlyDictionary<string, Platform> platformsByCode,
+        IReadOnlyDictionary<(Guid PlatformId, string ExternalId), ProviderLink> existingLinksByKey) =>
+        links
+            .Select(link => existingLinksByKey.GetValueOrDefault((GetPlatform(platformsByCode, link.PlatformCode).Id, link.ExternalId)))
+            .FirstOrDefault(match => match is not null);
+
+    private async Task<Dictionary<(Guid PlatformId, string ExternalId), ProviderLink>> LoadExistingLinksAsync(
         IReadOnlyList<ProviderLinkCandidate> links,
         IReadOnlyDictionary<string, Platform> platformsByCode,
         CancellationToken cancellationToken)
@@ -178,9 +216,18 @@ public sealed class EfCatalogRepository(ApplicationDbContext dbContext) : ICatal
             .Where(pl => externalIds.Contains(pl.ExternalId))
             .ToListAsync(cancellationToken);
 
-        return links
-            .Select(link => candidates.FirstOrDefault(pl => pl.ExternalId == link.ExternalId && pl.PlatformId == GetPlatform(platformsByCode, link.PlatformCode).Id))
-            .FirstOrDefault(match => match is not null);
+        var existingLinksByKey = new Dictionary<(Guid, string), ProviderLink>();
+        foreach (var link in links)
+        {
+            var platformId = GetPlatform(platformsByCode, link.PlatformCode).Id;
+            var match = candidates.FirstOrDefault(pl => pl.PlatformId == platformId && pl.ExternalId == link.ExternalId);
+            if (match is not null)
+            {
+                existingLinksByKey[(platformId, link.ExternalId)] = match;
+            }
+        }
+
+        return existingLinksByKey;
     }
 
     private static Platform GetPlatform(IReadOnlyDictionary<string, Platform> platformsByCode, string platformCode) =>

@@ -2,9 +2,11 @@ using Hodnota.Application.Catalog;
 
 namespace Hodnota.Api.Tests.Catalog;
 
-// Stands in for YouTubeStreamingProvider in tests — never makes a real HTTP call or needs an API key.
-public sealed class StubStreamingProvider : IStreamingProvider
+// Stands in for a real IStreamingProvider in tests — never makes a real HTTP call or needs an API key.
+public sealed class StubStreamingProvider(string providerCode) : IStreamingProvider
 {
+    public string ProviderCode { get; } = providerCode;
+
     public List<StreamingSearchResult> Results { get; set; } = [];
 
     public bool ThrowProviderException { get; set; }

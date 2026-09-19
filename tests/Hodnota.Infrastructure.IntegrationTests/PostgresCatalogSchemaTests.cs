@@ -28,6 +28,7 @@ public class PostgresCatalogSchemaTests(PostgresContainerFixture fixture) : ICla
         [
             PlatformCodes.YouTube,
             PlatformCodes.YouTubeMusic,
+            PlatformCodes.Spotify,
             PlatformCodes.Qobuz,
             PlatformCodes.Tidal,
             PlatformCodes.Deezer,

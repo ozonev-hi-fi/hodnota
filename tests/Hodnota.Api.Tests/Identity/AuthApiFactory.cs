@@ -40,7 +40,9 @@ public sealed class AuthApiFactory : WebApplicationFactory<Program>
             new KeyValuePair<string, string?>(DatabaseConfiguration.ProviderConfigKey, DatabaseConfiguration.SqliteProviderName),
             new KeyValuePair<string, string?>($"ConnectionStrings:{DatabaseConfiguration.ConnectionStringName}", _connectionString),
             // Program.cs resolves YouTubeService eagerly at startup — a placeholder value is enough,
-            // since this factory never calls YouTubeService's real methods, only constructs it.
+            // since this factory never calls its real methods, only constructs it. Spotify's own
+            // config is intentionally left unset: it's optional (see ADR 0011's addendum), so leaving
+            // it unset here doubles as proof the app still boots without it.
             new KeyValuePair<string, string?>(YouTubeConfiguration.ApiKeyConfigKey, "test-key"),
         ]));
 

@@ -12,7 +12,8 @@ public static class CatalogMappingExtensions
         candidate.Result.Type.ToCandidateType(),
         candidate.Result.Name,
         candidate.Result.ArtistName,
-        candidate.Result.ImageUrl);
+        candidate.Result.ImageUrl,
+        [.. candidate.Result.Links.Select(link => link.PlatformCode)]);
 
     public static SharePageResponse ToResponse(this SharePageResult result) => new(
         result.Id,

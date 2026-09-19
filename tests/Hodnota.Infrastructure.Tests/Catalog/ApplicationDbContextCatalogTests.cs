@@ -352,7 +352,7 @@ public class ApplicationDbContextCatalogTests
     }
 
     [Fact]
-    public async Task Platform_SeedData_ContainsAllSevenKnownPlatforms()
+    public async Task Platform_SeedData_ContainsAllKnownPlatforms()
     {
         var (connection, context) = await CreateContextAsync();
         await using var _ = connection;
@@ -364,6 +364,7 @@ public class ApplicationDbContextCatalogTests
         [
             PlatformCodes.YouTube,
             PlatformCodes.YouTubeMusic,
+            PlatformCodes.Spotify,
             PlatformCodes.Qobuz,
             PlatformCodes.Tidal,
             PlatformCodes.Deezer,

@@ -4,6 +4,7 @@ using Google.Apis.YouTube.v3;
 using Hodnota.Application.Catalog;
 using Hodnota.Infrastructure.Catalog;
 using Hodnota.Infrastructure.Identity;
+using Hodnota.Infrastructure.Providers.Spotify;
 using Hodnota.Infrastructure.Providers.YouTube;
 
 using Microsoft.AspNetCore.Identity;
@@ -15,11 +16,11 @@ namespace Hodnota.Infrastructure;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddInfrastructure(this IServiceCollection services) =>
+    public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration) =>
         services
             .AddDatabase()
             .AddAuth()
-            .AddCatalog();
+            .AddCatalog(configuration);
 
     private static IServiceCollection AddDatabase(this IServiceCollection services)
     {
@@ -61,12 +62,11 @@ public static class DependencyInjection
         return services;
     }
 
-    private static IServiceCollection AddCatalog(this IServiceCollection services)
+    private static IServiceCollection AddCatalog(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddMemoryCache();
         services.AddSingleton(serviceProvider =>
         {
-            var configuration = serviceProvider.GetRequiredService<IConfiguration>();
             var apiKey = configuration[YouTubeConfiguration.ApiKeyConfigKey];
 
             return string.IsNullOrEmpty(apiKey)
@@ -75,6 +75,30 @@ public static class DependencyInjection
         });
         services.AddSingleton<ISearchCandidateCache, MemorySearchCandidateCache>();
         services.AddScoped<IStreamingProvider, YouTubeStreamingProvider>();
+
+        // Spotify has required an active Premium subscription on the app-owner's account to use the
+        // Web API at all since Feb 2026 (see ADR 0011's addendum) — unlike YouTube's key, that isn't
+        // fixable by local configuration, so missing credentials mean "not available", not "misconfigured".
+        var spotifyClientId = configuration[SpotifyConfiguration.ClientIdConfigKey];
+        var spotifyClientSecret = configuration[SpotifyConfiguration.ClientSecretConfigKey];
+        if (!string.IsNullOrEmpty(spotifyClientId) && !string.IsNullOrEmpty(spotifyClientSecret))
+        {
+            services.AddSingleton(new SpotifyCredentials(spotifyClientId, spotifyClientSecret, configuration[SpotifyConfiguration.MarketConfigKey]));
+            services.AddHttpClient(SpotifyConfiguration.AccountsHttpClientName, client =>
+            {
+                client.BaseAddress = new Uri("https://accounts.spotify.com/");
+                client.Timeout = TimeSpan.FromSeconds(10);
+            });
+            services.AddHttpClient(SpotifyConfiguration.ApiHttpClientName, client =>
+            {
+                client.BaseAddress = new Uri("https://api.spotify.com/v1/");
+                client.Timeout = TimeSpan.FromSeconds(10);
+            });
+            services.AddSingleton<SpotifyAccessTokenProvider>();
+            services.AddSingleton<SpotifyApiClient>();
+            services.AddScoped<IStreamingProvider, SpotifyStreamingProvider>();
+        }
+
         services.AddScoped<ICatalogRepository, EfCatalogRepository>();
         services.AddScoped<CatalogSearchService>();
         services.AddScoped<SharePageService>();
