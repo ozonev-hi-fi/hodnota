@@ -4,6 +4,7 @@ public static class PlatformCodes
 {
     public const string YouTube = "youtube";
     public const string YouTubeMusic = "youtube-music";
+    public const string Spotify = "spotify";
     public const string Qobuz = "qobuz";
     public const string Tidal = "tidal";
     public const string Deezer = "deezer";

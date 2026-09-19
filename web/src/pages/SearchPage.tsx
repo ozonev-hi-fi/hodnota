@@ -7,6 +7,7 @@ import {
 } from '../api/catalog.ts';
 import { ApiError, userFacingMessage } from '../api/errors.ts';
 import { getAccountInfo } from '../api/identity.ts';
+import { platformLabel } from '../api/platforms.ts';
 import { useAuth } from '../auth/AuthContext.tsx';
 import KeyboardNavigableList from '../components/KeyboardNavigableList.tsx';
 
@@ -97,6 +98,10 @@ function SearchPage() {
             <>
               <strong>{candidate.name}</strong> — {candidate.artist}{' '}
               <span className="text-muted">({candidate.type})</span>
+              <br />
+              <span className="text-muted small">
+                {candidate.platforms.map(platformLabel).join(' · ')}
+              </span>
             </>
           )}
           onActivate={handleActivate}

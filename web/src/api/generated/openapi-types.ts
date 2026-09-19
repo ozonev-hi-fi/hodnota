@@ -615,6 +615,7 @@ export interface components {
             artist: string;
             /** Format: uri */
             imageUrl: null | string;
+            platforms: string[];
         };
         SearchRequest: {
             search: string;

@@ -23,7 +23,7 @@ public sealed class CatalogController(
         }
         catch (StreamingProviderException)
         {
-            return BadRequest("The search provider is currently unavailable.");
+            return BadRequest("The search providers are currently unavailable.");
         }
 
         IReadOnlyList<SearchCandidateResponse> response = [.. candidates.Select(candidate => candidate.ToResponse())];

@@ -27,7 +27,8 @@ public class CatalogEndpointsTests(CatalogApiFactory factory) : IClassFixture<Ca
     [Fact]
     public async Task Search_ReturnsCandidatesFromRegisteredProvider()
     {
-        factory.StreamingProvider.Results =
+        factory.SpotifyProvider.Results = [];
+        factory.YouTubeProvider.Results =
         [
             new StreamingSearchResult(
                 StreamingResultType.Track,
@@ -48,6 +49,83 @@ public class CatalogEndpointsTests(CatalogApiFactory factory) : IClassFixture<Ca
     }
 
     [Fact]
+    public async Task Search_SameResultFromBothProviders_ReturnsOneCandidateListingBothPlatforms()
+    {
+        factory.SpotifyProvider.Results =
+        [
+            new StreamingSearchResult(
+                StreamingResultType.Track,
+                "Nothing Else Matters",
+                "Metallica",
+                null,
+                [new ProviderLinkCandidate(PlatformCodes.Spotify, "sp-merge-1", new Uri("https://open.spotify.com/track/sp-merge-1"))]),
+        ];
+        factory.YouTubeProvider.Results =
+        [
+            new StreamingSearchResult(
+                StreamingResultType.Track,
+                "Metallica - Nothing Else Matters (Official Music Video)",
+                "Metallica",
+                null,
+                [new ProviderLinkCandidate(PlatformCodes.YouTube, "yt-merge-1", new Uri("https://www.youtube.com/watch?v=yt-merge-1"))]),
+        ];
+
+        var response = await _client.PostAsJsonAsync("/api/catalog/search", new SearchRequest("nothing"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var candidates = await response.Content.ReadFromJsonAsync<List<SearchCandidateResponse>>();
+        candidates.Should().ContainSingle();
+        candidates![0].Name.Should().Be("Nothing Else Matters");
+        candidates[0].Platforms.Should().Equal(PlatformCodes.Spotify, PlatformCodes.YouTube);
+    }
+
+    [Fact]
+    public async Task Search_WhenOneProviderFails_ReturnsTheRemainingProvidersResults()
+    {
+        factory.SpotifyProvider.ThrowProviderException = true;
+        factory.YouTubeProvider.Results =
+        [
+            new StreamingSearchResult(
+                StreamingResultType.Track,
+                "Still Here",
+                "Metallica",
+                null,
+                [new ProviderLinkCandidate(PlatformCodes.YouTube, "still-here", new Uri("https://www.youtube.com/watch?v=still-here"))]),
+        ];
+        try
+        {
+            var response = await _client.PostAsJsonAsync("/api/catalog/search", new SearchRequest("nothing"));
+
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+            var candidates = await response.Content.ReadFromJsonAsync<List<SearchCandidateResponse>>();
+            candidates.Should().ContainSingle();
+            candidates![0].Name.Should().Be("Still Here");
+        }
+        finally
+        {
+            factory.SpotifyProvider.ThrowProviderException = false;
+        }
+    }
+
+    [Fact]
+    public async Task Search_WhenAllProvidersFail_ReturnsBadRequest()
+    {
+        factory.SpotifyProvider.ThrowProviderException = true;
+        factory.YouTubeProvider.ThrowProviderException = true;
+        try
+        {
+            var response = await _client.PostAsJsonAsync("/api/catalog/search", new SearchRequest("nothing"));
+
+            response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        }
+        finally
+        {
+            factory.SpotifyProvider.ThrowProviderException = false;
+            factory.YouTubeProvider.ThrowProviderException = false;
+        }
+    }
+
+    [Fact]
     public async Task Search_WithoutAuth_ReturnsUnauthorized()
     {
         var response = await _anonymousClient.PostAsJsonAsync("/api/catalog/search", new SearchRequest("nothing"));
@@ -58,7 +136,8 @@ public class CatalogEndpointsTests(CatalogApiFactory factory) : IClassFixture<Ca
     [Fact]
     public async Task Resolve_WithValidCandidateId_CreatesSharePageWithBothLinks()
     {
-        factory.StreamingProvider.Results =
+        factory.SpotifyProvider.Results = [];
+        factory.YouTubeProvider.Results =
         [
             new StreamingSearchResult(
                 StreamingResultType.Track,
@@ -86,6 +165,88 @@ public class CatalogEndpointsTests(CatalogApiFactory factory) : IClassFixture<Ca
     }
 
     [Fact]
+    public async Task Resolve_MergedCandidate_CreatesSharePageWithLinksFromBothProviders()
+    {
+        factory.SpotifyProvider.Results =
+        [
+            new StreamingSearchResult(
+                StreamingResultType.Track,
+                "Nothing Else Matters",
+                "Metallica",
+                null,
+                [new ProviderLinkCandidate(PlatformCodes.Spotify, "sp-resolve-1", new Uri("https://open.spotify.com/track/sp-resolve-1"))]),
+        ];
+        factory.YouTubeProvider.Results =
+        [
+            new StreamingSearchResult(
+                StreamingResultType.Track,
+                "Metallica - Nothing Else Matters",
+                "Metallica",
+                null,
+                [
+                    new ProviderLinkCandidate(PlatformCodes.YouTube, "yt-resolve-1", new Uri("https://www.youtube.com/watch?v=yt-resolve-1")),
+                    new ProviderLinkCandidate(PlatformCodes.YouTubeMusic, "yt-resolve-1", new Uri("https://music.youtube.com/watch?v=yt-resolve-1")),
+                ]),
+        ];
+        var searchResponse = await _client.PostAsJsonAsync("/api/catalog/search", new SearchRequest("nothing"));
+        var candidates = await searchResponse.Content.ReadFromJsonAsync<List<SearchCandidateResponse>>();
+        candidates.Should().ContainSingle();
+
+        var response = await _client.PostAsJsonAsync("/api/catalog/resolve", new ResolveRequest(candidates![0].Id));
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var sharePage = await response.Content.ReadFromJsonAsync<SharePageResponse>();
+        sharePage!.Links.Should().HaveCount(3);
+        sharePage.Links.Should().Contain(l => l.Platform == PlatformCodes.Spotify);
+        sharePage.Links.Should().Contain(l => l.Platform == PlatformCodes.YouTube);
+        sharePage.Links.Should().Contain(l => l.Platform == PlatformCodes.YouTubeMusic);
+    }
+
+    [Fact]
+    public async Task Resolve_MergedCandidate_WhoseYouTubeLinkAlreadyExists_StillAddsTheSpotifyLink()
+    {
+        factory.SpotifyProvider.Results = [];
+        factory.YouTubeProvider.Results =
+        [
+            new StreamingSearchResult(
+                StreamingResultType.Track,
+                "Nothing Else Matters",
+                "Metallica",
+                null,
+                [
+                    new ProviderLinkCandidate(PlatformCodes.YouTube, "yt-shared", new Uri("https://www.youtube.com/watch?v=yt-shared")),
+                    new ProviderLinkCandidate(PlatformCodes.YouTubeMusic, "yt-shared", new Uri("https://music.youtube.com/watch?v=yt-shared")),
+                ]),
+        ];
+        var firstSearch = await _client.PostAsJsonAsync("/api/catalog/search", new SearchRequest("nothing"));
+        var firstCandidates = await firstSearch.Content.ReadFromJsonAsync<List<SearchCandidateResponse>>();
+        await _client.PostAsJsonAsync("/api/catalog/resolve", new ResolveRequest(firstCandidates![0].Id));
+
+        // A later search finds the same track on Spotify too — the merged candidate carries the
+        // already-resolved YouTube link plus a brand-new Spotify one. See ADR 0011.
+        factory.SpotifyProvider.Results =
+        [
+            new StreamingSearchResult(
+                StreamingResultType.Track,
+                "Nothing Else Matters",
+                "Metallica",
+                null,
+                [new ProviderLinkCandidate(PlatformCodes.Spotify, "sp-shared", new Uri("https://open.spotify.com/track/sp-shared"))]),
+        ];
+        var secondSearch = await _client.PostAsJsonAsync("/api/catalog/search", new SearchRequest("nothing"));
+        var secondCandidates = await secondSearch.Content.ReadFromJsonAsync<List<SearchCandidateResponse>>();
+        secondCandidates.Should().ContainSingle();
+
+        var resolveResponse = await _client.PostAsJsonAsync("/api/catalog/resolve", new ResolveRequest(secondCandidates![0].Id));
+
+        var sharePage = await resolveResponse.Content.ReadFromJsonAsync<SharePageResponse>();
+        sharePage!.Links.Should().HaveCount(3);
+        sharePage.Links.Should().Contain(l => l.Platform == PlatformCodes.Spotify);
+        sharePage.Links.Should().Contain(l => l.Platform == PlatformCodes.YouTube);
+        sharePage.Links.Should().Contain(l => l.Platform == PlatformCodes.YouTubeMusic);
+    }
+
+    [Fact]
     public async Task Resolve_WithoutAuth_ReturnsUnauthorized()
     {
         var response = await _anonymousClient.PostAsJsonAsync("/api/catalog/resolve", new ResolveRequest("unknown-id"));
@@ -110,25 +271,10 @@ public class CatalogEndpointsTests(CatalogApiFactory factory) : IClassFixture<Ca
     }
 
     [Fact]
-    public async Task Search_WhenProviderFails_ReturnsBadGateway()
-    {
-        factory.StreamingProvider.ThrowProviderException = true;
-        try
-        {
-            var response = await _client.PostAsJsonAsync("/api/catalog/search", new SearchRequest("nothing"));
-
-            response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        }
-        finally
-        {
-            factory.StreamingProvider.ThrowProviderException = false;
-        }
-    }
-
-    [Fact]
     public async Task GetSharePage_WithExistingId_ReturnsSharePage_WithoutAuth()
     {
-        factory.StreamingProvider.Results =
+        factory.SpotifyProvider.Results = [];
+        factory.YouTubeProvider.Results =
         [
             new StreamingSearchResult(
                 StreamingResultType.Track,
