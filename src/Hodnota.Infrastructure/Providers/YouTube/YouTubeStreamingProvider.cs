@@ -15,6 +15,8 @@ public sealed class YouTubeStreamingProvider(YouTubeService youTubeService) : IS
     private const string YouTubeMusicHost = "https://music.youtube.com";
     private const string UnknownArtist = "Unknown";
 
+    public string ProviderCode => ProviderCodes.YouTube;
+
     public async Task<IReadOnlyList<StreamingSearchResult>> SearchAsync(string query, CancellationToken cancellationToken)
     {
         var request = youTubeService.Search.List("snippet");

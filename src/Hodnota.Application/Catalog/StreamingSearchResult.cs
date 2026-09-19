@@ -1,3 +1,5 @@
+using Hodnota.Domain.Catalog;
+
 namespace Hodnota.Application.Catalog;
 
 public sealed record StreamingSearchResult(
@@ -5,4 +7,5 @@ public sealed record StreamingSearchResult(
     string Name,
     string ArtistName,
     Uri? ImageUrl,
-    IReadOnlyList<ProviderLinkCandidate> Links);
+    IReadOnlyList<ProviderLinkCandidate> Links,
+    ReleaseType? ReleaseType = null);

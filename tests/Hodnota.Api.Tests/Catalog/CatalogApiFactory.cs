@@ -15,9 +15,11 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace Hodnota.Api.Tests.Catalog;
 
 // Runs the real API host against an in-memory (shared-cache, so it survives across requests) SQLite
-// database, with the real YouTube provider swapped for a stub — no real API key, no network calls.
-// Program.cs still resolves a real YouTubeService singleton eagerly at startup though, so a
-// placeholder YouTube:ApiKey value is required for the app to boot at all.
+// database, with the real YouTube and Spotify providers swapped for stubs — no real API keys, no
+// network calls. Program.cs still resolves a real YouTubeService singleton eagerly at startup though,
+// so a placeholder YouTube config value is required for the app to boot at all. Spotify's own config
+// is left unset — it's optional (see ADR 0011's addendum), so the real Spotify provider is never even
+// registered here; RemoveAll<IStreamingProvider>() + the stub re-add below don't depend on it being.
 public sealed class CatalogApiFactory : WebApplicationFactory<Program>
 {
     private readonly string _connectionString = new SqliteConnectionStringBuilder
@@ -29,7 +31,9 @@ public sealed class CatalogApiFactory : WebApplicationFactory<Program>
 
     private readonly SqliteConnection _keepAliveConnection;
 
-    public StubStreamingProvider StreamingProvider { get; } = new();
+    public StubStreamingProvider SpotifyProvider { get; } = new(ProviderCodes.Spotify);
+
+    public StubStreamingProvider YouTubeProvider { get; } = new(ProviderCodes.YouTube);
 
     public CapturingEmailSender EmailSender { get; } = new();
 
@@ -51,7 +55,11 @@ public sealed class CatalogApiFactory : WebApplicationFactory<Program>
         builder.ConfigureServices(services =>
         {
             services.RemoveAll<IStreamingProvider>();
-            services.AddSingleton<IStreamingProvider>(StreamingProvider);
+            // Registered in reverse trust order deliberately, so endpoint tests that depend on
+            // Spotify-before-YouTube ordering prove ProviderTrustOrder.Sort is doing the sorting,
+            // not an accident of registration order.
+            services.AddSingleton<IStreamingProvider>(YouTubeProvider);
+            services.AddSingleton<IStreamingProvider>(SpotifyProvider);
             services.RemoveAll<IEmailSender<ApplicationUser>>();
             services.AddSingleton<IEmailSender<ApplicationUser>>(EmailSender);
         });

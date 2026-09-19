@@ -29,4 +29,24 @@ public class CatalogMappingExtensionsTests
         response.Links.Single().Type.ToString().Should().Be(platformType.ToString(),
             $"{nameof(DomainPlatformType)}.{platformType} must have a matching {nameof(PlatformType)} case in {nameof(CatalogMappingExtensions)}");
     }
+
+    [Fact]
+    public void ToResponse_Candidate_ListsPlatformCodesFromItsLinksInOrder()
+    {
+        var result = new StreamingSearchResult(
+            StreamingResultType.Track,
+            "Nothing Else Matters",
+            "Metallica",
+            null,
+            [
+                new ProviderLinkCandidate("spotify", "sp1", new Uri("https://open.spotify.com/track/sp1")),
+                new ProviderLinkCandidate("youtube", "yt1", new Uri("https://www.youtube.com/watch?v=yt1")),
+                new ProviderLinkCandidate("youtube-music", "yt1", new Uri("https://music.youtube.com/watch?v=yt1")),
+            ]);
+        var candidate = new CatalogSearchCandidate("candidate-1", result);
+
+        var response = candidate.ToResponse();
+
+        response.Platforms.Should().Equal("spotify", "youtube", "youtube-music");
+    }
 }

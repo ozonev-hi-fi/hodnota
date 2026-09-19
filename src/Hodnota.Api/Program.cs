@@ -13,7 +13,7 @@ DotEnvLoader.LoadIfPresent();
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services
-    .AddInfrastructure()
+    .AddInfrastructure(builder.Configuration)
     .AddDocumentation()
     .AddControllers();
 

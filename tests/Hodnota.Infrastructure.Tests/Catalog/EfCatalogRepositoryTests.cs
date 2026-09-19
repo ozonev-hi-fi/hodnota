@@ -151,6 +151,83 @@ public class EfCatalogRepositoryTests
     }
 
     [Fact]
+    public async Task CreateSharePageAsync_ExistingEntityAndANewPlatformLink_AddsTheMissingLink()
+    {
+        var (connection, context) = await CreateContextAsync();
+        await using var _ = connection;
+        await using var __ = context;
+        var repository = new EfCatalogRepository(context);
+        var youTubeOnly = new StreamingSearchResult(
+            StreamingResultType.Track,
+            "Nothing Else Matters",
+            "Metallica",
+            null,
+            [new ProviderLinkCandidate(PlatformCodes.YouTube, "video-1", new Uri("https://www.youtube.com/watch?v=video-1"))]);
+        await repository.CreateSharePageAsync(youTubeOnly, CancellationToken.None);
+
+        // Simulates a merged candidate: the same YouTube link this track already has, plus a
+        // brand-new Spotify link a later search discovered for the same song. See ADR 0011.
+        var mergedWithSpotify = new StreamingSearchResult(
+            StreamingResultType.Track,
+            "Nothing Else Matters",
+            "Metallica",
+            null,
+            [
+                new ProviderLinkCandidate(PlatformCodes.Spotify, "sp-1", new Uri("https://open.spotify.com/track/sp-1")),
+                new ProviderLinkCandidate(PlatformCodes.YouTube, "video-1", new Uri("https://www.youtube.com/watch?v=video-1")),
+            ]);
+
+        var result = await repository.CreateSharePageAsync(mergedWithSpotify, CancellationToken.None);
+
+        result.Links.Select(l => l.PlatformCode).Should().Contain(PlatformCodes.Spotify);
+        result.Links.Should().HaveCount(2);
+        (await context.Tracks.CountAsync()).Should().Be(1);
+        (await context.ProviderLinks.CountAsync()).Should().Be(2);
+    }
+
+    [Fact]
+    public async Task CreateSharePageAsync_LinkAlreadyOwnedByADifferentEntity_SkipsItWithoutThrowing()
+    {
+        var (connection, context) = await CreateContextAsync();
+        await using var _ = connection;
+        await using var __ = context;
+        var repository = new EfCatalogRepository(context);
+        var entityA = new StreamingSearchResult(
+            StreamingResultType.Track,
+            "Nothing Else Matters",
+            "Metallica",
+            null,
+            [new ProviderLinkCandidate(PlatformCodes.Spotify, "sp-1", new Uri("https://open.spotify.com/track/sp-1"))]);
+        var entityB = new StreamingSearchResult(
+            StreamingResultType.Track,
+            "Nothing Else Matters (Live)",
+            "Metallica",
+            null,
+            [new ProviderLinkCandidate(PlatformCodes.YouTube, "video-1", new Uri("https://www.youtube.com/watch?v=video-1"))]);
+        await repository.CreateSharePageAsync(entityA, CancellationToken.None);
+        await repository.CreateSharePageAsync(entityB, CancellationToken.None);
+
+        // Straddles both pre-existing entities: the Spotify link belongs to entityA, the YouTube
+        // link to entityB. Resolves into entityA (the first candidate link that already exists)
+        // and must skip the YouTube link rather than duplicate it onto entityA or crash.
+        var straddling = new StreamingSearchResult(
+            StreamingResultType.Track,
+            "Nothing Else Matters",
+            "Metallica",
+            null,
+            [
+                new ProviderLinkCandidate(PlatformCodes.Spotify, "sp-1", new Uri("https://open.spotify.com/track/sp-1")),
+                new ProviderLinkCandidate(PlatformCodes.YouTube, "video-1", new Uri("https://www.youtube.com/watch?v=video-1")),
+            ]);
+
+        var result = await repository.CreateSharePageAsync(straddling, CancellationToken.None);
+
+        result.Links.Should().ContainSingle(l => l.PlatformCode == PlatformCodes.Spotify);
+        (await context.Tracks.CountAsync()).Should().Be(2);
+        (await context.ProviderLinks.CountAsync()).Should().Be(2);
+    }
+
+    [Fact]
     public async Task GetSharePageAsync_WithExistingId_ReturnsSharePageWithPlatformType()
     {
         var (connection, context) = await CreateContextAsync();

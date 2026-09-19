@@ -61,6 +61,7 @@ describe('SearchPage', () => {
         name: 'Nothing Else Matters',
         artist: 'Metallica',
         imageUrl: null,
+        platforms: ['spotify', 'youtube'],
       },
     ]);
     renderPage();
@@ -69,6 +70,24 @@ describe('SearchPage', () => {
 
     expect(await screen.findByText('Nothing Else Matters')).toBeInTheDocument();
     expect(searchCatalog).toHaveBeenCalledWith('nothing');
+  });
+
+  it('shows the platforms a result was found on', async () => {
+    vi.mocked(searchCatalog).mockResolvedValue([
+      {
+        id: 'c1',
+        type: 'Song',
+        name: 'Nothing Else Matters',
+        artist: 'Metallica',
+        imageUrl: null,
+        platforms: ['spotify', 'youtube'],
+      },
+    ]);
+    renderPage();
+
+    search('nothing');
+
+    expect(await screen.findByText('Spotify · YouTube')).toBeInTheDocument();
   });
 
   it('shows an error message when search fails', async () => {
@@ -92,6 +111,7 @@ describe('SearchPage', () => {
         name: 'Track',
         artist: 'Artist',
         imageUrl: null,
+        platforms: ['youtube'],
       },
     ]);
     vi.mocked(resolveCatalog).mockResolvedValue({
@@ -118,6 +138,7 @@ describe('SearchPage', () => {
         name: 'Track',
         artist: 'Artist',
         imageUrl: null,
+        platforms: ['youtube'],
       },
     ]);
     vi.mocked(resolveCatalog).mockRejectedValue(new ApiError('Not Found', 404));
