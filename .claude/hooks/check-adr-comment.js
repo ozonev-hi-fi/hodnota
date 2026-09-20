@@ -33,7 +33,7 @@ process.stdin.on("end", () => {
   const normalized = filePath.replace(/\\/g, "/");
   const baseName = normalized.split("/").pop();
 
-  if (/(^|\/)docs\//.test(normalized) || baseName === "CLAUDE.md" || baseName === "CLAUDE.local.md") {
+  if (/(^|\/)docs\//.test(normalized) || /(^|\/)\.claude\/skills\//.test(normalized) || baseName === "CLAUDE.md" || baseName === "CLAUDE.local.md") {
     process.exit(0);
   }
 

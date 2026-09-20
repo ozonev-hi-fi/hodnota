@@ -17,6 +17,16 @@ public class ProviderTrustOrderTests
     }
 
     [Fact]
+    public void Sort_AllThreeProvidersRegisteredOutOfOrder_ReturnsThemInTrustOrder()
+    {
+        var providers = new[] { NewProvider(ProviderCodes.YouTube), NewProvider(ProviderCodes.Spotify), NewProvider(ProviderCodes.Qobuz) };
+
+        var sorted = ProviderTrustOrder.Sort(providers);
+
+        sorted.Select(p => p.ProviderCode).Should().Equal(ProviderCodes.Qobuz, ProviderCodes.Spotify, ProviderCodes.YouTube);
+    }
+
+    [Fact]
     public void Sort_UnknownProviderCode_IsOrderedLast()
     {
         var providers = new[] { NewProvider("unknown"), NewProvider(ProviderCodes.YouTube), NewProvider(ProviderCodes.Spotify) };

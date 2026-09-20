@@ -62,6 +62,23 @@ public class CatalogSearchServiceTests
     }
 
     [Fact]
+    public async Task SearchAsync_MoreThanTwentyMergedResults_ReturnsOnlyTheFirstTwentyAndDoesNotCacheTheRest()
+    {
+        var results = Enumerable.Range(1, 25).Select(i => NewResult($"Song {i}")).ToList();
+        var provider = NewProvider(ProviderCodes.YouTube);
+        provider.SearchAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(results);
+        var cache = Substitute.For<ISearchCandidateCache>();
+        cache.Store(Arg.Any<StreamingSearchResult>()).Returns(_ => Guid.NewGuid().ToString());
+        var service = new CatalogSearchService([provider], cache, NullLogger<CatalogSearchService>.Instance);
+
+        var candidates = await service.SearchAsync("query", CancellationToken.None);
+
+        candidates.Should().HaveCount(20);
+        candidates.Select(c => c.Result.Name).Should().Equal(results.Take(20).Select(r => r.Name));
+        cache.Received(20).Store(Arg.Any<StreamingSearchResult>());
+    }
+
+    [Fact]
     public async Task SearchAsync_OneProviderThrows_StillReturnsTheOtherProvidersResults()
     {
         var failing = NewProvider(ProviderCodes.Spotify);

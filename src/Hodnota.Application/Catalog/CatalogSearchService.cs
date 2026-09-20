@@ -7,6 +7,8 @@ public sealed class CatalogSearchService(
     ISearchCandidateCache cache,
     ILogger<CatalogSearchService> logger)
 {
+    private const int MaxMergedResults = 20;
+
     public async Task<IReadOnlyList<CatalogSearchCandidate>> SearchAsync(string query, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(query))
@@ -25,7 +27,7 @@ public sealed class CatalogSearchService(
 
         var merged = SearchResultMerger.Merge(attempts.Select(attempt => attempt.Results));
 
-        return [.. merged.Select(result => new CatalogSearchCandidate(cache.Store(result), result))];
+        return [.. merged.Take(MaxMergedResults).Select(result => new CatalogSearchCandidate(cache.Store(result), result))];
     }
 
     private async Task<ProviderAttempt> SearchProviderAsync(IStreamingProvider provider, string query, CancellationToken cancellationToken)

@@ -22,7 +22,7 @@ public sealed class YouTubeStreamingProvider(YouTubeService youTubeService) : IS
         var request = youTubeService.Search.List("snippet");
         request.Q = query;
         request.Type = "video,playlist";
-        request.MaxResults = 10;
+        request.MaxResults = 50;
 
         SearchListResponse response;
         try
@@ -34,7 +34,8 @@ public sealed class YouTubeStreamingProvider(YouTubeService youTubeService) : IS
             throw new StreamingProviderException("YouTube search request failed.", ex);
         }
 
-        return [.. response.Items.Where(IsUsable).Select(ToSearchResult)];
+        var queryWords = SearchResultRelevanceFilter.ParseQueryWords(query);
+        return [.. response.Items.Where(IsUsable).Select(ToSearchResult).Where(result => SearchResultRelevanceFilter.IsRelevant(queryWords, result))];
     }
 
     internal static bool IsUsable(SearchResult item) =>

@@ -4,6 +4,7 @@ using Google.Apis.YouTube.v3;
 using Hodnota.Application.Catalog;
 using Hodnota.Infrastructure.Catalog;
 using Hodnota.Infrastructure.Identity;
+using Hodnota.Infrastructure.Providers.Qobuz;
 using Hodnota.Infrastructure.Providers.Spotify;
 using Hodnota.Infrastructure.Providers.YouTube;
 
@@ -97,6 +98,22 @@ public static class DependencyInjection
             services.AddSingleton<SpotifyAccessTokenProvider>();
             services.AddSingleton<SpotifyApiClient>();
             services.AddScoped<IStreamingProvider, SpotifyStreamingProvider>();
+        }
+
+        var qobuzAppId = configuration[QobuzConfiguration.AppIdConfigKey];
+        var qobuzUserToken = configuration[QobuzConfiguration.UserTokenConfigKey];
+        if (!string.IsNullOrEmpty(qobuzAppId) && !string.IsNullOrEmpty(qobuzUserToken))
+        {
+            services.AddHttpClient(QobuzConfiguration.ApiHttpClientName, client =>
+            {
+                client.BaseAddress = new Uri("https://www.qobuz.com/api.json/0.2/");
+                client.Timeout = TimeSpan.FromSeconds(10);
+                client.DefaultRequestHeaders.Add("X-App-Id", qobuzAppId);
+                client.DefaultRequestHeaders.Add("X-User-Auth-Token", qobuzUserToken);
+                client.DefaultRequestHeaders.UserAgent.ParseAdd(QobuzConfiguration.UserAgent);
+            });
+            services.AddSingleton<QobuzApiClient>();
+            services.AddScoped<IStreamingProvider, QobuzStreamingProvider>();
         }
 
         services.AddScoped<ICatalogRepository, EfCatalogRepository>();

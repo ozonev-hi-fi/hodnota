@@ -80,6 +80,56 @@ public class CatalogEndpointsTests(CatalogApiFactory factory) : IClassFixture<Ca
     }
 
     [Fact]
+    public async Task Search_SameResultFromAllThreeProviders_QobuzWinsTheSpineAndAllThreePlatformsAreListed()
+    {
+        // No other test in this shared-fixture class ever sets QobuzProvider.Results away from its
+        // default empty list, so it must be put back afterward — unlike Spotify/YouTube, nothing
+        // else in the class re-zeroes it at the start of its own test.
+        factory.QobuzProvider.Results =
+        [
+            new StreamingSearchResult(
+                StreamingResultType.Track,
+                "Nothing Else Matters",
+                "Metallica",
+                null,
+                [new ProviderLinkCandidate(PlatformCodes.Qobuz, "qb-merge-1", new Uri("https://open.qobuz.com/track/qb-merge-1"))]),
+        ];
+        factory.SpotifyProvider.Results =
+        [
+            new StreamingSearchResult(
+                StreamingResultType.Track,
+                "Nothing Else Matters",
+                "Metallica",
+                null,
+                [new ProviderLinkCandidate(PlatformCodes.Spotify, "sp-merge-2", new Uri("https://open.spotify.com/track/sp-merge-2"))]),
+        ];
+        factory.YouTubeProvider.Results =
+        [
+            new StreamingSearchResult(
+                StreamingResultType.Track,
+                "Metallica - Nothing Else Matters (Official Music Video)",
+                "Metallica",
+                null,
+                [new ProviderLinkCandidate(PlatformCodes.YouTube, "yt-merge-2", new Uri("https://www.youtube.com/watch?v=yt-merge-2"))]),
+        ];
+        try
+        {
+            var response = await _client.PostAsJsonAsync("/api/catalog/search", new SearchRequest("nothing"));
+
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+            var candidates = await response.Content.ReadFromJsonAsync<List<SearchCandidateResponse>>();
+            candidates.Should().ContainSingle();
+            candidates![0].Name.Should().Be("Nothing Else Matters");
+            candidates[0].Artist.Should().Be("Metallica");
+            candidates[0].Platforms.Should().Equal(PlatformCodes.Qobuz, PlatformCodes.Spotify, PlatformCodes.YouTube);
+        }
+        finally
+        {
+            factory.QobuzProvider.Results = [];
+        }
+    }
+
+    [Fact]
     public async Task Search_WhenOneProviderFails_ReturnsTheRemainingProvidersResults()
     {
         factory.SpotifyProvider.ThrowProviderException = true;
@@ -110,6 +160,7 @@ public class CatalogEndpointsTests(CatalogApiFactory factory) : IClassFixture<Ca
     [Fact]
     public async Task Search_WhenAllProvidersFail_ReturnsBadRequest()
     {
+        factory.QobuzProvider.ThrowProviderException = true;
         factory.SpotifyProvider.ThrowProviderException = true;
         factory.YouTubeProvider.ThrowProviderException = true;
         try
@@ -120,6 +171,7 @@ public class CatalogEndpointsTests(CatalogApiFactory factory) : IClassFixture<Ca
         }
         finally
         {
+            factory.QobuzProvider.ThrowProviderException = false;
             factory.SpotifyProvider.ThrowProviderException = false;
             factory.YouTubeProvider.ThrowProviderException = false;
         }

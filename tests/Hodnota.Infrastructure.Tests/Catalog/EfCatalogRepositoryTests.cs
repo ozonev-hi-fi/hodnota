@@ -228,6 +228,110 @@ public class EfCatalogRepositoryTests
     }
 
     [Fact]
+    public async Task CreateSharePageAsync_NewTrackWithIsrc_PersistsIsrc()
+    {
+        var (connection, context) = await CreateContextAsync();
+        await using var _ = connection;
+        await using var __ = context;
+        var repository = new EfCatalogRepository(context);
+        var result = NewTrackResult() with { Isrc = "USRC17607839" };
+
+        await repository.CreateSharePageAsync(result, CancellationToken.None);
+
+        (await context.Tracks.Select(t => t.Isrc).SingleAsync()).Should().Be("USRC17607839");
+    }
+
+    [Fact]
+    public async Task CreateSharePageAsync_NewReleaseWithUpc_PersistsUpc()
+    {
+        var (connection, context) = await CreateContextAsync();
+        await using var _ = connection;
+        await using var __ = context;
+        var repository = new EfCatalogRepository(context);
+        var result = new StreamingSearchResult(
+            StreamingResultType.Release,
+            "Nothing",
+            "N.E.R.D.",
+            null,
+            [new ProviderLinkCandidate(PlatformCodes.Qobuz, "album-1", new Uri("https://open.qobuz.com/album/album-1"))],
+            Upc: "042284197928");
+
+        await repository.CreateSharePageAsync(result, CancellationToken.None);
+
+        (await context.Releases.Select(r => r.Upc).SingleAsync()).Should().Be("042284197928");
+    }
+
+    [Fact]
+    public async Task CreateSharePageAsync_ConflictingIsrc_CreatesSecondTrackWithoutCrashingOrDuplicatingTheIsrc()
+    {
+        var (connection, context) = await CreateContextAsync();
+        await using var _ = connection;
+        await using var __ = context;
+        var repository = new EfCatalogRepository(context);
+        var first = new StreamingSearchResult(
+            StreamingResultType.Track,
+            "Nothing Else Matters",
+            "Metallica",
+            null,
+            [new ProviderLinkCandidate(PlatformCodes.Qobuz, "1", new Uri("https://open.qobuz.com/track/1"))],
+            Isrc: "USRC17607839");
+        await repository.CreateSharePageAsync(first, CancellationToken.None);
+
+        // A different, unlinked provider result for what happens to be the same real-world
+        // recording (same Isrc) but no shared ProviderLinkCandidate, so it resolves as a new track
+        // rather than being recognized as the existing one — resolve-time dedup by natural key is
+        // deferred (see ADR 0011).
+        var second = new StreamingSearchResult(
+            StreamingResultType.Track,
+            "Nothing Else Matters",
+            "Metallica",
+            null,
+            [new ProviderLinkCandidate(PlatformCodes.Spotify, "sp-1", new Uri("https://open.spotify.com/track/sp-1"))],
+            Isrc: "USRC17607839");
+
+        var act = () => repository.CreateSharePageAsync(second, CancellationToken.None);
+
+        await act.Should().NotThrowAsync();
+        (await context.Tracks.CountAsync()).Should().Be(2);
+        (await context.Tracks.Select(t => t.Isrc).ToListAsync()).Should().BeEquivalentTo(["USRC17607839", null]);
+    }
+
+    [Fact]
+    public async Task CreateSharePageAsync_ConflictingUpc_CreatesSecondReleaseWithoutCrashingOrDuplicatingTheUpc()
+    {
+        var (connection, context) = await CreateContextAsync();
+        await using var _ = connection;
+        await using var __ = context;
+        var repository = new EfCatalogRepository(context);
+        var first = new StreamingSearchResult(
+            StreamingResultType.Release,
+            "Nothing",
+            "N.E.R.D.",
+            null,
+            [new ProviderLinkCandidate(PlatformCodes.Qobuz, "album-1", new Uri("https://open.qobuz.com/album/album-1"))],
+            Upc: "042284197928");
+        await repository.CreateSharePageAsync(first, CancellationToken.None);
+
+        // A different, unlinked provider result for what happens to be the same real-world release
+        // (same Upc) but no shared ProviderLinkCandidate, so it resolves as a new release rather than
+        // being recognized as the existing one — resolve-time dedup by natural key is deferred (see
+        // ADR 0011).
+        var second = new StreamingSearchResult(
+            StreamingResultType.Release,
+            "Nothing",
+            "N.E.R.D.",
+            null,
+            [new ProviderLinkCandidate(PlatformCodes.Spotify, "sp-album-1", new Uri("https://open.spotify.com/album/sp-album-1"))],
+            Upc: "042284197928");
+
+        var act = () => repository.CreateSharePageAsync(second, CancellationToken.None);
+
+        await act.Should().NotThrowAsync();
+        (await context.Releases.CountAsync()).Should().Be(2);
+        (await context.Releases.Select(r => r.Upc).ToListAsync()).Should().BeEquivalentTo(["042284197928", null]);
+    }
+
+    [Fact]
     public async Task GetSharePageAsync_WithExistingId_ReturnsSharePageWithPlatformType()
     {
         var (connection, context) = await CreateContextAsync();
