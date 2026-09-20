@@ -2,6 +2,7 @@ using AwesomeAssertions;
 
 using Hodnota.Application.Catalog;
 using Hodnota.Infrastructure;
+using Hodnota.Infrastructure.Providers.Qobuz;
 using Hodnota.Infrastructure.Providers.Spotify;
 using Hodnota.Infrastructure.Providers.YouTube;
 
@@ -52,5 +53,48 @@ public class DependencyInjectionTests
         var streamingProviders = provider.GetServices<IStreamingProvider>();
 
         streamingProviders.Select(p => p.ProviderCode).Should().BeEquivalentTo([ProviderCodes.YouTube, ProviderCodes.Spotify]);
+    }
+
+    [Fact]
+    public void AddInfrastructure_WithoutQobuzCredentials_DoesNotRegisterQobuzProvider()
+    {
+        var configuration = BuildConfiguration(new Dictionary<string, string?>());
+        var services = new ServiceCollection().AddInfrastructure(configuration);
+        using var provider = services.BuildServiceProvider();
+
+        var streamingProviders = provider.GetServices<IStreamingProvider>();
+
+        streamingProviders.Select(p => p.ProviderCode).Should().NotContain(ProviderCodes.Qobuz);
+    }
+
+    [Fact]
+    public void AddInfrastructure_WithQobuzCredentials_RegistersQobuzProvider()
+    {
+        var configuration = BuildConfiguration(new Dictionary<string, string?>
+        {
+            [QobuzConfiguration.AppIdConfigKey] = "app-id",
+            [QobuzConfiguration.UserTokenConfigKey] = "user-token",
+        });
+        var services = new ServiceCollection().AddInfrastructure(configuration);
+        using var provider = services.BuildServiceProvider();
+
+        var streamingProviders = provider.GetServices<IStreamingProvider>();
+
+        streamingProviders.Select(p => p.ProviderCode).Should().BeEquivalentTo([ProviderCodes.YouTube, ProviderCodes.Qobuz]);
+    }
+
+    [Fact]
+    public void AddInfrastructure_WithOnlyQobuzAppId_DoesNotRegisterQobuzProvider()
+    {
+        var configuration = BuildConfiguration(new Dictionary<string, string?>
+        {
+            [QobuzConfiguration.AppIdConfigKey] = "app-id",
+        });
+        var services = new ServiceCollection().AddInfrastructure(configuration);
+        using var provider = services.BuildServiceProvider();
+
+        var streamingProviders = provider.GetServices<IStreamingProvider>();
+
+        streamingProviders.Select(p => p.ProviderCode).Should().NotContain(ProviderCodes.Qobuz);
     }
 }

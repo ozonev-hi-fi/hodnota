@@ -17,7 +17,8 @@ public sealed record SpotifyTrack(
     [property: JsonPropertyName("name")] string? Name,
     [property: JsonPropertyName("artists")] IReadOnlyList<SpotifyArtist>? Artists,
     [property: JsonPropertyName("album")] SpotifyAlbum? Album,
-    [property: JsonPropertyName("external_urls")] SpotifyExternalUrls? ExternalUrls);
+    [property: JsonPropertyName("external_urls")] SpotifyExternalUrls? ExternalUrls,
+    [property: JsonPropertyName("external_ids")] SpotifyExternalIds? ExternalIds = null);
 
 public sealed record SpotifyAlbum(
     [property: JsonPropertyName("id")] string? Id,
@@ -35,3 +36,5 @@ public sealed record SpotifyImage(
     [property: JsonPropertyName("height")] int? Height);
 
 public sealed record SpotifyExternalUrls([property: JsonPropertyName("spotify")] string? Spotify);
+
+public sealed record SpotifyExternalIds([property: JsonPropertyName("isrc")] string? Isrc);

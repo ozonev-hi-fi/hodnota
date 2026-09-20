@@ -11,17 +11,33 @@ namespace Hodnota.Infrastructure.Catalog;
 public sealed class EfCatalogRepository(ApplicationDbContext dbContext) : ICatalogRepository
 {
     private const string ProviderLinkExternalIdIndexName = "IX_ProviderLinks_PlatformId_ExternalId";
+    private const string TrackIsrcIndexName = "IX_Tracks_Isrc";
+    private const string ReleaseUpcIndexName = "IX_Releases_Upc";
 
     public async Task<SharePageResult> CreateSharePageAsync(StreamingSearchResult result, CancellationToken cancellationToken)
     {
-        try
+        // Each conflict type is only retried on the first two attempts, so a retry that hits the
+        // *other* conflict type (e.g. the ProviderLink retry then collides on Isrc/Upc, or vice
+        // versa) is still resolved instead of crashing, while a persistent, unrelated failure still
+        // surfaces after two retries rather than looping forever.
+        for (var attempt = 0; ; attempt++)
         {
-            return await CreateSharePageCoreAsync(result, cancellationToken);
-        }
-        catch (DbUpdateException ex) when (IsProviderLinkExternalIdConflict(ex))
-        {
-            dbContext.ChangeTracker.Clear();
-            return await CreateSharePageCoreAsync(result, cancellationToken);
+            try
+            {
+                return await CreateSharePageCoreAsync(result, cancellationToken);
+            }
+            catch (DbUpdateException ex) when (attempt < 2 && IsProviderLinkExternalIdConflict(ex))
+            {
+                dbContext.ChangeTracker.Clear();
+            }
+            catch (DbUpdateException ex) when (attempt < 2 && IsNaturalKeyConflict(ex))
+            {
+                // A different, unlinked provider result already created a Track/Release with this same
+                // Isrc/Upc. Retrying without the natural key avoids a crash; it does not merge into
+                // that existing entity.
+                dbContext.ChangeTracker.Clear();
+                result = result with { Isrc = null, Upc = null };
+            }
         }
     }
 
@@ -29,6 +45,13 @@ public sealed class EfCatalogRepository(ApplicationDbContext dbContext) : ICatal
     {
         PostgresException pg => pg.SqlState == PostgresErrorCodes.UniqueViolation && pg.ConstraintName == ProviderLinkExternalIdIndexName,
         SqliteException sqlite => sqlite.SqliteExtendedErrorCode == 2067 && sqlite.Message.Contains("ProviderLinks.PlatformId, ProviderLinks.ExternalId"),
+        _ => false,
+    };
+
+    internal static bool IsNaturalKeyConflict(DbUpdateException ex) => ex.InnerException switch
+    {
+        PostgresException pg => pg.SqlState == PostgresErrorCodes.UniqueViolation && (pg.ConstraintName == TrackIsrcIndexName || pg.ConstraintName == ReleaseUpcIndexName),
+        SqliteException sqlite => sqlite.SqliteExtendedErrorCode == 2067 && (sqlite.Message.Contains("Tracks.Isrc") || sqlite.Message.Contains("Releases.Upc")),
         _ => false,
     };
 
@@ -115,7 +138,7 @@ public sealed class EfCatalogRepository(ApplicationDbContext dbContext) : ICatal
         }
 
         var artist = new Artist { Name = result.ArtistName };
-        var track = new Track { Title = result.Name };
+        var track = new Track { Title = result.Name, Isrc = result.Isrc };
         dbContext.AddRange(artist, track, new ArtistCredit { Artist = artist, Track = track, Role = CreditRole.MainArtist });
         var links = CreateMissingProviderLinks(result.Links, platformsByCode, existingLinksByKey, track: track);
         dbContext.ProviderLinks.AddRange(links);
@@ -144,7 +167,7 @@ public sealed class EfCatalogRepository(ApplicationDbContext dbContext) : ICatal
         var artist = new Artist { Name = result.ArtistName };
         // Least-wrong default for a provider that carries no release-type signal (e.g. a YouTube
         // playlist). Spotify's album_type maps onto ReleaseType directly — see SpotifyStreamingProvider.
-        var release = new Release { Title = result.Name, Type = result.ReleaseType ?? ReleaseType.Album };
+        var release = new Release { Title = result.Name, Type = result.ReleaseType ?? ReleaseType.Album, Upc = result.Upc };
         dbContext.AddRange(artist, release, new ArtistCredit { Artist = artist, Release = release, Role = CreditRole.MainArtist });
         var links = CreateMissingProviderLinks(result.Links, platformsByCode, existingLinksByKey, release: release);
         dbContext.ProviderLinks.AddRange(links);

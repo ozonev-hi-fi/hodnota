@@ -24,7 +24,8 @@ public class SpotifyStreamingProviderMappingTests
             [new SpotifyArtist("Metallica")],
             [new SpotifyImage("https://example.com/640.jpg", 640, 640), new SpotifyImage("https://example.com/300.jpg", 300, 300), new SpotifyImage("https://example.com/64.jpg", 64, 64)],
             new SpotifyExternalUrls("https://open.spotify.com/album/album-1")),
-        new SpotifyExternalUrls("https://open.spotify.com/track/track-1"));
+        new SpotifyExternalUrls("https://open.spotify.com/track/track-1"),
+        new SpotifyExternalIds("USRC17607839"));
 
     private static SpotifyAlbum NewAlbum(string id = "album-1", string? albumType = "album") => new(
         id,
@@ -46,6 +47,24 @@ public class SpotifyStreamingProviderMappingTests
         [
             new ProviderLinkCandidate(PlatformCodes.Spotify, "track-1", new Uri("https://open.spotify.com/track/track-1")),
         ]);
+    }
+
+    [Fact]
+    public void ToSearchResult_TrackItem_PopulatesIsrcFromExternalIds()
+    {
+        var result = SpotifyStreamingProvider.ToSearchResult(NewTrack());
+
+        result.Isrc.Should().Be("USRC17607839");
+    }
+
+    [Fact]
+    public void ToSearchResult_TrackMissingExternalIds_IsrcIsNull()
+    {
+        var track = NewTrack() with { ExternalIds = null };
+
+        var result = SpotifyStreamingProvider.ToSearchResult(track);
+
+        result.Isrc.Should().BeNull();
     }
 
     [Fact]

@@ -38,7 +38,8 @@ public sealed class SpotifyStreamingProvider(SpotifyApiClient apiClient) : IStre
             track.Name!,
             JoinArtists(track.Artists),
             PickImage(track.Album?.Images),
-            [new ProviderLinkCandidate(PlatformCodes.Spotify, externalId, BuildUrl(track.ExternalUrls, "track", externalId))]);
+            [new ProviderLinkCandidate(PlatformCodes.Spotify, externalId, BuildUrl(track.ExternalUrls, "track", externalId))],
+            Isrc: track.ExternalIds?.Isrc);
     }
 
     internal static StreamingSearchResult ToSearchResult(SpotifyAlbum album)
