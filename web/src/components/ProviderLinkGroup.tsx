@@ -1,3 +1,5 @@
+import { platformLabel } from '../api/platforms.ts';
+
 interface ProviderLink {
   platform: string;
   url: string;
@@ -20,7 +22,7 @@ function ProviderLinkGroup({ category, links }: ProviderLinkGroupProps) {
         {links.map((link) => (
           <li key={link.url} className="mb-2">
             <a href={link.url} target="_blank" rel="noreferrer">
-              {link.platform}
+              {platformLabel(link.platform)}
             </a>
           </li>
         ))}

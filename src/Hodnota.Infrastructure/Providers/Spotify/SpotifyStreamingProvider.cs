@@ -13,9 +13,9 @@ public sealed class SpotifyStreamingProvider(SpotifyApiClient apiClient) : IStre
 
     public string ProviderCode => ProviderCodes.Spotify;
 
-    public async Task<IReadOnlyList<StreamingSearchResult>> SearchAsync(string query, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<StreamingSearchResult>> SearchAsync(string query, StreamingResultType type, CancellationToken cancellationToken)
     {
-        var response = await apiClient.SearchAsync(query, cancellationToken);
+        var response = await apiClient.SearchAsync(query, type, cancellationToken);
 
         var tracks = (response.Tracks?.Items ?? []).Where(IsUsable).Select(ToSearchResult);
         var albums = (response.Albums?.Items ?? []).Where(IsUsable).Select(ToSearchResult);

@@ -9,7 +9,7 @@ public sealed class CatalogSearchService(
 {
     private const int MaxMergedResults = 20;
 
-    public async Task<IReadOnlyList<CatalogSearchCandidate>> SearchAsync(string query, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<CatalogSearchCandidate>> SearchAsync(string query, StreamingResultType type, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(query))
         {
@@ -17,7 +17,7 @@ public sealed class CatalogSearchService(
         }
 
         var ordered = ProviderTrustOrder.Sort(providers);
-        var attempts = await Task.WhenAll(ordered.Select(provider => SearchProviderAsync(provider, query, cancellationToken)));
+        var attempts = await Task.WhenAll(ordered.Select(provider => SearchProviderAsync(provider, query, type, cancellationToken)));
 
         var failures = attempts.Where(attempt => attempt.Failure is not null).Select(attempt => attempt.Failure!).ToList();
         if (attempts.Length > 0 && failures.Count == attempts.Length)
@@ -30,11 +30,11 @@ public sealed class CatalogSearchService(
         return [.. merged.Take(MaxMergedResults).Select(result => new CatalogSearchCandidate(cache.Store(result), result))];
     }
 
-    private async Task<ProviderAttempt> SearchProviderAsync(IStreamingProvider provider, string query, CancellationToken cancellationToken)
+    private async Task<ProviderAttempt> SearchProviderAsync(IStreamingProvider provider, string query, StreamingResultType type, CancellationToken cancellationToken)
     {
         try
         {
-            return new ProviderAttempt(await provider.SearchAsync(query, cancellationToken), null);
+            return new ProviderAttempt(await provider.SearchAsync(query, type, cancellationToken), null);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

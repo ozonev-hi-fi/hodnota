@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router';
 import {
   resolveCatalog,
   type SearchCandidate,
+  type SearchType,
   searchCatalog,
 } from '../api/catalog.ts';
 import { ApiError, userFacingMessage } from '../api/errors.ts';
@@ -11,11 +12,17 @@ import { platformLabel } from '../api/platforms.ts';
 import { useAuth } from '../auth/AuthContext.tsx';
 import KeyboardNavigableList from '../components/KeyboardNavigableList.tsx';
 
+const SEARCH_TYPES: { value: SearchType; label: string }[] = [
+  { value: 'Song', label: 'Song' },
+  { value: 'Album', label: 'Album' },
+];
+
 function SearchPage() {
   const { logout } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const [searchType, setSearchType] = useState<SearchType>('Song');
   const [results, setResults] = useState<SearchCandidate[]>([]);
   const [searchToken, setSearchToken] = useState(0);
   const [searching, setSearching] = useState(false);
@@ -34,7 +41,7 @@ function SearchPage() {
     setError(null);
     setSearching(true);
     try {
-      const candidates = await searchCatalog(query);
+      const candidates = await searchCatalog(query, searchType);
       setResults(candidates);
       setSearchToken((token) => token + 1);
     } catch (err) {
@@ -75,19 +82,53 @@ function SearchPage() {
         </button>
       </p>
       {error && <div className="alert alert-danger">{error}</div>}
-      <form onSubmit={handleSearch} className="d-flex gap-2 mb-4">
-        <input
-          type="text"
-          className="form-control"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search for a song or album"
-          aria-label="Search"
-          required
-        />
-        <button type="submit" className="btn btn-primary" disabled={searching}>
-          {searching ? 'Searching…' : 'Search'}
-        </button>
+      <form onSubmit={handleSearch} className="mb-4">
+        <fieldset className="mb-2">
+          <legend className="fs-6 text-muted mb-1">
+            What are you looking for?
+          </legend>
+          {SEARCH_TYPES.map(({ value, label }) => (
+            <div key={value} className="form-check form-check-inline">
+              <input
+                type="radio"
+                className="form-check-input"
+                id={`search-type-${value}`}
+                name="search-type"
+                value={value}
+                checked={searchType === value}
+                onChange={() => setSearchType(value)}
+              />
+              <label
+                className="form-check-label"
+                htmlFor={`search-type-${value}`}
+              >
+                {label}
+              </label>
+            </div>
+          ))}
+        </fieldset>
+        <div className="d-flex gap-2">
+          <input
+            type="text"
+            className="form-control"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={
+              searchType === 'Song'
+                ? 'Search for a song'
+                : 'Search for an album'
+            }
+            aria-label="Search"
+            required
+          />
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={searching}
+          >
+            {searching ? 'Searching…' : 'Search'}
+          </button>
+        </div>
       </form>
       {results.length > 0 && (
         <KeyboardNavigableList

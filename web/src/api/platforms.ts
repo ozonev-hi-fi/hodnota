@@ -7,6 +7,7 @@ const PLATFORM_LABELS: Record<string, string> = {
   deezer: 'Deezer',
   'apple-music': 'Apple Music',
   bandcamp: 'Bandcamp',
+  discogs: 'Discogs',
 };
 
 export function platformLabel(code: string): string {

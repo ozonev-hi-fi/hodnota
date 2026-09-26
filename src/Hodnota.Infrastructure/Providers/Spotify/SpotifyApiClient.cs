@@ -17,20 +17,20 @@ public sealed class SpotifyApiClient(
 {
     private const int ResultLimitPerType = 5;
 
-    public async Task<SpotifySearchResponse> SearchAsync(string query, CancellationToken cancellationToken)
+    public async Task<SpotifySearchResponse> SearchAsync(string query, StreamingResultType type, CancellationToken cancellationToken)
     {
-        var response = await SendSearchRequestAsync(query, cancellationToken);
+        var response = await SendSearchRequestAsync(query, type, cancellationToken);
         if (response.StatusCode == HttpStatusCode.Unauthorized)
         {
             response.Dispose();
             tokenProvider.Invalidate();
-            response = await SendSearchRequestAsync(query, cancellationToken);
+            response = await SendSearchRequestAsync(query, type, cancellationToken);
         }
 
         return await StreamingSearchResponseReader.ReadAsync(response, "Spotify", logger, () => new SpotifySearchResponse(null, null), cancellationToken);
     }
 
-    private async Task<HttpResponseMessage> SendSearchRequestAsync(string query, CancellationToken cancellationToken)
+    private async Task<HttpResponseMessage> SendSearchRequestAsync(string query, StreamingResultType type, CancellationToken cancellationToken)
     {
         var client = httpClientFactory.CreateClient(SpotifyConfiguration.ApiHttpClientName);
         var token = await tokenProvider.GetTokenAsync(cancellationToken);
@@ -38,7 +38,7 @@ public sealed class SpotifyApiClient(
         var queryParams = new Dictionary<string, string?>
         {
             ["q"] = query,
-            ["type"] = "track,album",
+            ["type"] = type == StreamingResultType.Track ? "track" : "album",
             ["limit"] = ResultLimitPerType.ToString(),
         };
         if (!string.IsNullOrEmpty(credentials.Market))

@@ -619,6 +619,7 @@ export interface components {
         };
         SearchRequest: {
             search: string;
+            type: components["schemas"]["CandidateType"];
         };
         SharePageLinkResponse: {
             platform: string;

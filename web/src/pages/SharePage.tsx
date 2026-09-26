@@ -88,6 +88,10 @@ function SharePage() {
     });
   }
 
+  const discogsLink = linksByCategory.Discover.find(
+    (link) => link.platform === 'discogs',
+  );
+
   return (
     <>
       <p className="text-muted mb-1">Artist</p>
@@ -101,6 +105,15 @@ function SharePage() {
           links={linksByCategory[category]}
         />
       ))}
+      {discogsLink && (
+        <p className="small text-muted">
+          Data provided by{' '}
+          <a href={discogsLink.url} target="_blank" rel="noreferrer">
+            Discogs
+          </a>
+          .
+        </p>
+      )}
       <p className="mt-3">
         <Link to="/">Back to search</Link>
       </p>

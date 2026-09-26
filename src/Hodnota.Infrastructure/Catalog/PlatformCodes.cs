@@ -10,4 +10,5 @@ public static class PlatformCodes
     public const string Deezer = "deezer";
     public const string AppleMusic = "apple-music";
     public const string Bandcamp = "bandcamp";
+    public const string Discogs = "discogs";
 }

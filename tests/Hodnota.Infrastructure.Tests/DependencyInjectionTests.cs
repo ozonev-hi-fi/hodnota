@@ -2,6 +2,7 @@ using AwesomeAssertions;
 
 using Hodnota.Application.Catalog;
 using Hodnota.Infrastructure;
+using Hodnota.Infrastructure.Providers.Discogs;
 using Hodnota.Infrastructure.Providers.Qobuz;
 using Hodnota.Infrastructure.Providers.Spotify;
 using Hodnota.Infrastructure.Providers.YouTube;
@@ -23,12 +24,13 @@ public class DependencyInjectionTests
                 [DatabaseConfiguration.ProviderConfigKey] = DatabaseConfiguration.SqliteProviderName,
                 [$"ConnectionStrings:{DatabaseConfiguration.ConnectionStringName}"] = "DataSource=:memory:",
                 [YouTubeConfiguration.ApiKeyConfigKey] = "test-key",
+                [DiscogsConfiguration.TokenConfigKey] = "test-token",
             })
             .AddInMemoryCollection(overrides)
             .Build();
 
     [Fact]
-    public void AddInfrastructure_WithoutSpotifyCredentials_RegistersOnlyYouTubeProvider()
+    public void AddInfrastructure_WithoutSpotifyOrQobuzCredentials_RegistersOnlyYouTubeAndDiscogsProviders()
     {
         var configuration = BuildConfiguration(new Dictionary<string, string?>());
         var services = new ServiceCollection().AddInfrastructure(configuration);
@@ -36,7 +38,35 @@ public class DependencyInjectionTests
 
         var streamingProviders = provider.GetServices<IStreamingProvider>();
 
-        streamingProviders.Select(p => p.ProviderCode).Should().BeEquivalentTo([ProviderCodes.YouTube]);
+        streamingProviders.Select(p => p.ProviderCode).Should().BeEquivalentTo([ProviderCodes.YouTube, ProviderCodes.Discogs]);
+    }
+
+    [Fact]
+    public void AddInfrastructure_WithoutDiscogsToken_ThrowsWhenDiscogsCredentialsAreResolved()
+    {
+        var configuration = BuildConfiguration(new Dictionary<string, string?>
+        {
+            [DiscogsConfiguration.TokenConfigKey] = null,
+        });
+        var services = new ServiceCollection().AddInfrastructure(configuration);
+        using var provider = services.BuildServiceProvider();
+
+        var act = () => provider.GetRequiredService<DiscogsCredentials>();
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void AddInfrastructure_DiscogsHttpClient_SendsTokenAndUserAgentOnEveryRequest()
+    {
+        var configuration = BuildConfiguration(new Dictionary<string, string?>());
+        var services = new ServiceCollection().AddInfrastructure(configuration);
+        using var provider = services.BuildServiceProvider();
+
+        var client = provider.GetRequiredService<IHttpClientFactory>().CreateClient(DiscogsConfiguration.ApiHttpClientName);
+
+        client.DefaultRequestHeaders.Authorization!.ToString().Should().Be("Discogs token=test-token");
+        client.DefaultRequestHeaders.UserAgent.ToString().Should().Be(DiscogsConfiguration.UserAgent);
     }
 
     [Fact]
@@ -52,7 +82,7 @@ public class DependencyInjectionTests
 
         var streamingProviders = provider.GetServices<IStreamingProvider>();
 
-        streamingProviders.Select(p => p.ProviderCode).Should().BeEquivalentTo([ProviderCodes.YouTube, ProviderCodes.Spotify]);
+        streamingProviders.Select(p => p.ProviderCode).Should().BeEquivalentTo([ProviderCodes.YouTube, ProviderCodes.Discogs, ProviderCodes.Spotify]);
     }
 
     [Fact]
@@ -80,7 +110,7 @@ public class DependencyInjectionTests
 
         var streamingProviders = provider.GetServices<IStreamingProvider>();
 
-        streamingProviders.Select(p => p.ProviderCode).Should().BeEquivalentTo([ProviderCodes.YouTube, ProviderCodes.Qobuz]);
+        streamingProviders.Select(p => p.ProviderCode).Should().BeEquivalentTo([ProviderCodes.YouTube, ProviderCodes.Discogs, ProviderCodes.Qobuz]);
     }
 
     [Fact]

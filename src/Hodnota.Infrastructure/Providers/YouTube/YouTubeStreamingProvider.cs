@@ -17,11 +17,11 @@ public sealed class YouTubeStreamingProvider(YouTubeService youTubeService) : IS
 
     public string ProviderCode => ProviderCodes.YouTube;
 
-    public async Task<IReadOnlyList<StreamingSearchResult>> SearchAsync(string query, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<StreamingSearchResult>> SearchAsync(string query, StreamingResultType type, CancellationToken cancellationToken)
     {
         var request = youTubeService.Search.List("snippet");
         request.Q = query;
-        request.Type = "video,playlist";
+        request.Type = type == StreamingResultType.Track ? "video" : "playlist";
         request.MaxResults = 50;
 
         SearchListResponse response;

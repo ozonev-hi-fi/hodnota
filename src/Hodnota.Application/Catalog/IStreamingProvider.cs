@@ -4,5 +4,5 @@ public interface IStreamingProvider
 {
     string ProviderCode { get; }
 
-    Task<IReadOnlyList<StreamingSearchResult>> SearchAsync(string query, CancellationToken cancellationToken);
+    Task<IReadOnlyList<StreamingSearchResult>> SearchAsync(string query, StreamingResultType type, CancellationToken cancellationToken);
 }

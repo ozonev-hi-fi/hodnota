@@ -3,6 +3,7 @@ using Google.Apis.YouTube.v3;
 using Hodnota.Api.OpenApi;
 using Hodnota.Infrastructure;
 using Hodnota.Infrastructure.Identity;
+using Hodnota.Infrastructure.Providers.Discogs;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -31,8 +32,9 @@ await using (var scope = app.Services.CreateAsyncScope())
         await dbContext.Database.EnsureCreatedAsync();
     }
 
-    // Forces the YouTubeService singleton factory to run now. Failing fast on a missing/invalid YouTube:ApiKey at startup.
+    // Forces the YouTubeService and DiscogsCredentials singleton factories to run now. Failing fast on a missing/invalid YouTube:ApiKey or Discogs:Token at startup.
     _ = scope.ServiceProvider.GetRequiredService<YouTubeService>();
+    _ = scope.ServiceProvider.GetRequiredService<DiscogsCredentials>();
 }
 
 app.UseAuthentication();

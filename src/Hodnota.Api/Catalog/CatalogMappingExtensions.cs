@@ -22,6 +22,9 @@ public static class CatalogMappingExtensions
         result.ArtistName,
         [.. result.Links.Select(link => new SharePageLinkResponse(link.PlatformCode, link.Url, link.PlatformType.ToContractType()))]);
 
+    public static StreamingResultType ToStreamingResultType(this CandidateType type) =>
+        type == CandidateType.Song ? StreamingResultType.Track : StreamingResultType.Release;
+
     private static CandidateType ToCandidateType(this StreamingResultType type) =>
         type == StreamingResultType.Track ? CandidateType.Song : CandidateType.Album;
 

@@ -41,19 +41,21 @@ public class SpotifyApiClientTests
         return (client, apiHandler, accountsHandler);
     }
 
-    [Fact]
-    public async Task SearchAsync_SendsTrackAndAlbumTypesWithBearerToken()
+    [Theory]
+    [InlineData(StreamingResultType.Track, "track")]
+    [InlineData(StreamingResultType.Release, "album")]
+    public async Task SearchAsync_SendsOnlyTheRequestedTypeWithBearerToken(StreamingResultType type, string expectedType)
     {
         var (client, apiHandler, accountsHandler) = NewClient();
         accountsHandler.Enqueue(TokenResponse());
         apiHandler.Enqueue(SearchResponse());
 
-        await client.SearchAsync("nothing else matters", CancellationToken.None);
+        await client.SearchAsync("nothing else matters", type, CancellationToken.None);
 
         var request = apiHandler.Requests.Should().ContainSingle().Subject;
         var query = QueryHelpers.ParseQuery(request.RequestUri!.Query);
         query["q"].ToString().Should().Be("nothing else matters");
-        query["type"].ToString().Should().Be("track,album");
+        query["type"].ToString().Should().Be(expectedType);
         query["limit"].ToString().Should().Be("5");
         request.Headers.Authorization!.Scheme.Should().Be("Bearer");
         request.Headers.Authorization.Parameter.Should().Be("test-token");
@@ -66,7 +68,7 @@ public class SpotifyApiClientTests
         accountsHandler.Enqueue(TokenResponse());
         apiHandler.Enqueue(SearchResponse());
 
-        await client.SearchAsync("query", CancellationToken.None);
+        await client.SearchAsync("query", StreamingResultType.Track, CancellationToken.None);
 
         var query = QueryHelpers.ParseQuery(apiHandler.Requests[0].RequestUri!.Query);
         query["market"].ToString().Should().Be("US");
@@ -79,7 +81,7 @@ public class SpotifyApiClientTests
         accountsHandler.Enqueue(TokenResponse());
         apiHandler.Enqueue(SearchResponse());
 
-        await client.SearchAsync("query", CancellationToken.None);
+        await client.SearchAsync("query", StreamingResultType.Track, CancellationToken.None);
 
         var query = QueryHelpers.ParseQuery(apiHandler.Requests[0].RequestUri!.Query);
         query.Should().NotContainKey("market");
@@ -92,7 +94,7 @@ public class SpotifyApiClientTests
         accountsHandler.Enqueue(TokenResponse());
         apiHandler.Enqueue(SearchResponse());
 
-        await client.SearchAsync("metallica & friends?", CancellationToken.None);
+        await client.SearchAsync("metallica & friends?", StreamingResultType.Track, CancellationToken.None);
 
         var query = QueryHelpers.ParseQuery(apiHandler.Requests[0].RequestUri!.Query);
         query["q"].ToString().Should().Be("metallica & friends?");
@@ -107,7 +109,7 @@ public class SpotifyApiClientTests
         apiHandler.Enqueue(new HttpResponseMessage(HttpStatusCode.Unauthorized));
         apiHandler.Enqueue(SearchResponse());
 
-        await client.SearchAsync("query", CancellationToken.None);
+        await client.SearchAsync("query", StreamingResultType.Track, CancellationToken.None);
 
         apiHandler.Requests.Should().HaveCount(2);
         apiHandler.Requests[0].Headers.Authorization!.Parameter.Should().Be("token-1");
@@ -123,7 +125,7 @@ public class SpotifyApiClientTests
         apiHandler.Enqueue(new HttpResponseMessage(HttpStatusCode.Unauthorized));
         apiHandler.Enqueue(new HttpResponseMessage(HttpStatusCode.Unauthorized));
 
-        var act = () => client.SearchAsync("query", CancellationToken.None);
+        var act = () => client.SearchAsync("query", StreamingResultType.Track, CancellationToken.None);
 
         await act.Should().ThrowAsync<StreamingProviderException>();
     }
@@ -137,7 +139,7 @@ public class SpotifyApiClientTests
         tooManyRequests.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.FromSeconds(5));
         apiHandler.Enqueue(tooManyRequests);
 
-        var act = () => client.SearchAsync("query", CancellationToken.None);
+        var act = () => client.SearchAsync("query", StreamingResultType.Track, CancellationToken.None);
 
         await act.Should().ThrowAsync<StreamingProviderException>();
         apiHandler.Requests.Should().ContainSingle();
@@ -150,7 +152,7 @@ public class SpotifyApiClientTests
         accountsHandler.Enqueue(TokenResponse());
         apiHandler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("not json", System.Text.Encoding.UTF8, "application/json") });
 
-        var act = () => client.SearchAsync("query", CancellationToken.None);
+        var act = () => client.SearchAsync("query", StreamingResultType.Track, CancellationToken.None);
 
         await act.Should().ThrowAsync<StreamingProviderException>();
     }

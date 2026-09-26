@@ -10,14 +10,13 @@ public sealed class QobuzStreamingProvider(QobuzApiClient apiClient) : IStreamin
 
     public string ProviderCode => ProviderCodes.Qobuz;
 
-    public async Task<IReadOnlyList<StreamingSearchResult>> SearchAsync(string query, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<StreamingSearchResult>> SearchAsync(string query, StreamingResultType type, CancellationToken cancellationToken)
     {
         var response = await apiClient.SearchAsync(query, cancellationToken);
 
-        var tracks = (response.Tracks?.Items ?? []).Where(IsUsable).Select(ToSearchResult);
-        var albums = (response.Albums?.Items ?? []).Where(IsUsable).Select(ToSearchResult);
-
-        return [.. tracks, .. albums];
+        return type == StreamingResultType.Track
+            ? [.. (response.Tracks?.Items ?? []).Where(IsUsable).Select(ToSearchResult)]
+            : [.. (response.Albums?.Items ?? []).Where(IsUsable).Select(ToSearchResult)];
     }
 
     internal static bool IsUsable(QobuzTrack track) =>

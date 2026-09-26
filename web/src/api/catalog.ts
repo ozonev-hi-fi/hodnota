@@ -4,12 +4,14 @@ import type { components } from './generated/openapi-types.ts';
 
 export type SearchCandidate = components['schemas']['SearchCandidateResponse'];
 export type SharePage = components['schemas']['SharePageResponse'];
+export type SearchType = components['schemas']['CandidateType'];
 
 export async function searchCatalog(
   search: string,
+  type: SearchType,
 ): Promise<SearchCandidate[]> {
   const result = await apiClient.POST('/api/catalog/search', {
-    body: { search },
+    body: { search, type },
   });
   return unwrap(result, 'Search failed.');
 }

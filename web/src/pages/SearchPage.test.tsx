@@ -53,6 +53,25 @@ describe('SearchPage', () => {
     ).toBeInTheDocument();
   });
 
+  it('has Song pre-selected', () => {
+    renderPage();
+
+    expect(screen.getByLabelText('Song')).toBeChecked();
+    expect(screen.getByLabelText('Album')).not.toBeChecked();
+  });
+
+  it('searches for albums when Album is selected', async () => {
+    vi.mocked(searchCatalog).mockResolvedValue([]);
+    renderPage();
+
+    fireEvent.click(screen.getByLabelText('Album'));
+    search('black album');
+
+    await vi.waitFor(() =>
+      expect(searchCatalog).toHaveBeenCalledWith('black album', 'Album'),
+    );
+  });
+
   it('searches and renders the results', async () => {
     vi.mocked(searchCatalog).mockResolvedValue([
       {
@@ -69,7 +88,7 @@ describe('SearchPage', () => {
     search('nothing');
 
     expect(await screen.findByText('Nothing Else Matters')).toBeInTheDocument();
-    expect(searchCatalog).toHaveBeenCalledWith('nothing');
+    expect(searchCatalog).toHaveBeenCalledWith('nothing', 'Song');
   });
 
   it('shows the platforms a result was found on', async () => {

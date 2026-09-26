@@ -1,9 +1,12 @@
+using System.Net.Http.Headers;
+
 using Google.Apis.Services;
 using Google.Apis.YouTube.v3;
 
 using Hodnota.Application.Catalog;
 using Hodnota.Infrastructure.Catalog;
 using Hodnota.Infrastructure.Identity;
+using Hodnota.Infrastructure.Providers.Discogs;
 using Hodnota.Infrastructure.Providers.Qobuz;
 using Hodnota.Infrastructure.Providers.Spotify;
 using Hodnota.Infrastructure.Providers.YouTube;
@@ -76,6 +79,27 @@ public static class DependencyInjection
         });
         services.AddSingleton<ISearchCandidateCache, MemorySearchCandidateCache>();
         services.AddScoped<IStreamingProvider, YouTubeStreamingProvider>();
+
+        // Deferred into the factory delegate, not evaluated here directly, for the same reason
+        // YouTube's is above: AddCatalog runs before builder.Build(), so a direct read here would
+        // miss any configuration source (e.g. a test host's ConfigureAppConfiguration) only
+        // applied at Build() time.
+        services.AddSingleton(_ =>
+        {
+            var token = configuration[DiscogsConfiguration.TokenConfigKey];
+            return string.IsNullOrEmpty(token)
+                ? throw new InvalidOperationException($"Missing required configuration value '{DiscogsConfiguration.TokenConfigKey}'.")
+                : new DiscogsCredentials(token);
+        });
+        services.AddHttpClient(DiscogsConfiguration.ApiHttpClientName, (serviceProvider, client) =>
+        {
+            client.BaseAddress = new Uri("https://api.discogs.com/");
+            client.Timeout = TimeSpan.FromSeconds(10);
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Discogs", $"token={serviceProvider.GetRequiredService<DiscogsCredentials>().Token}");
+            client.DefaultRequestHeaders.UserAgent.ParseAdd(DiscogsConfiguration.UserAgent);
+        });
+        services.AddSingleton<DiscogsApiClient>();
+        services.AddScoped<IStreamingProvider, DiscogsStreamingProvider>();
 
         // Spotify has required an active Premium subscription on the app-owner's account to use the
         // Web API at all since Feb 2026 (see ADR 0011's addendum) — unlike YouTube's key, that isn't
