@@ -16,7 +16,7 @@ public sealed class CatalogSearchService(
             return [];
         }
 
-        var ordered = ProviderTrustOrder.Sort(providers);
+        var ordered = ProviderTrustOrder.Sort(providers.Where(provider => provider.Supports(type)));
         var attempts = await Task.WhenAll(ordered.Select(provider => SearchProviderAsync(provider, query, type, cancellationToken)));
 
         var failures = attempts.Where(attempt => attempt.Failure is not null).Select(attempt => attempt.Failure!).ToList();
@@ -34,7 +34,8 @@ public sealed class CatalogSearchService(
     {
         try
         {
-            return new ProviderAttempt(await provider.SearchAsync(query, type, cancellationToken), null);
+            var results = await provider.SearchAsync(query, type, cancellationToken);
+            return new ProviderAttempt([.. results.Where(result => result.Type == type)], null);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

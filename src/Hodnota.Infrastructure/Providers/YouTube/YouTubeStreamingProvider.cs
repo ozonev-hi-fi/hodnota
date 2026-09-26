@@ -17,6 +17,8 @@ public sealed class YouTubeStreamingProvider(YouTubeService youTubeService) : IS
 
     public string ProviderCode => ProviderCodes.YouTube;
 
+    public bool Supports(StreamingResultType type) => true;
+
     public async Task<IReadOnlyList<StreamingSearchResult>> SearchAsync(string query, StreamingResultType type, CancellationToken cancellationToken)
     {
         var request = youTubeService.Search.List("snippet");

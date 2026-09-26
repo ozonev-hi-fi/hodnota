@@ -21,19 +21,11 @@ public sealed class TestHttpMessageHandler : HttpMessageHandler
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        var body = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
-
-        // Locked because some providers (Discogs) send several requests in parallel.
-        Func<HttpRequestMessage, HttpResponseMessage> respond;
-        lock (_responses)
-        {
-            Requests.Add(request);
-            RequestBodies.Add(body);
-            respond = _responses.Count > 0
-                ? _responses.Dequeue()
-                : throw new InvalidOperationException("No more queued responses for TestHttpMessageHandler.");
-        }
-
+        Requests.Add(request);
+        RequestBodies.Add(request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken));
+        var respond = _responses.Count > 0
+            ? _responses.Dequeue()
+            : throw new InvalidOperationException("No more queued responses for TestHttpMessageHandler.");
         return respond(request);
     }
 

@@ -116,7 +116,9 @@ public class DiscogsStreamingProviderMappingTests
     [Theory]
     [InlineData("Compilation", ReleaseType.Compilation)]
     [InlineData("Single", ReleaseType.Single)]
+    [InlineData("Maxi-Single", ReleaseType.Single)]
     [InlineData("EP", ReleaseType.EP)]
+    [InlineData("Mini-Album", ReleaseType.EP)]
     [InlineData("Live", ReleaseType.Live)]
     [InlineData("compilation", ReleaseType.Compilation)]
     public void ToSearchResult_ReleaseFormatKeyword_MapsToMatchingReleaseType(string keyword, ReleaseType expected)

@@ -333,6 +333,16 @@ public class CatalogEndpointsTests(CatalogApiFactory factory) : IClassFixture<Ca
     }
 
     [Theory]
+    [InlineData(0)]
+    [InlineData(7)]
+    public async Task Search_WithIntegerType_ReturnsBadRequest(int type)
+    {
+        var response = await _client.PostAsJsonAsync("/api/catalog/search", new { search = "nothing", type });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Theory]
     [InlineData(CandidateType.Song, StreamingResultType.Track)]
     [InlineData(CandidateType.Album, StreamingResultType.Release)]
     public async Task Search_PassesTheRequestedTypeToProviders(CandidateType requested, StreamingResultType expected)

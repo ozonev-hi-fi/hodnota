@@ -13,6 +13,8 @@ public sealed class StubStreamingProvider(string providerCode) : IStreamingProvi
 
     public StreamingResultType? LastRequestedType { get; private set; }
 
+    public bool Supports(StreamingResultType type) => true;
+
     public Task<IReadOnlyList<StreamingSearchResult>> SearchAsync(string query, StreamingResultType type, CancellationToken cancellationToken)
     {
         LastRequestedType = type;

@@ -11,8 +11,8 @@ namespace Hodnota.Application.Tests.Catalog;
 
 public class CatalogSearchServiceTests
 {
-    private static StreamingSearchResult NewResult(string name, string platformCode = "youtube") => new(
-        StreamingResultType.Track,
+    private static StreamingSearchResult NewResult(string name, string platformCode = "youtube", StreamingResultType type = StreamingResultType.Track) => new(
+        type,
         name,
         "Artist",
         null,
@@ -22,6 +22,7 @@ public class CatalogSearchServiceTests
     {
         var provider = Substitute.For<IStreamingProvider>();
         provider.ProviderCode.Returns(providerCode);
+        provider.Supports(Arg.Any<StreamingResultType>()).Returns(true);
         return provider;
     }
 
@@ -111,6 +112,54 @@ public class CatalogSearchServiceTests
         var act = () => service.SearchAsync("query", StreamingResultType.Track, CancellationToken.None);
 
         await act.Should().ThrowAsync<StreamingProviderException>();
+    }
+
+    [Fact]
+    public async Task SearchAsync_OnlySupportingProviderThrows_ThrowsEvenWhenAnUnsupportingProviderIsRegistered()
+    {
+        var discogs = NewProvider(ProviderCodes.Discogs);
+        discogs.Supports(StreamingResultType.Track).Returns(false);
+        var youTube = NewProvider(ProviderCodes.YouTube);
+        youTube.SearchAsync(Arg.Any<string>(), Arg.Any<StreamingResultType>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(new StreamingProviderException("quota", new InvalidOperationException()));
+        var cache = Substitute.For<ISearchCandidateCache>();
+        var service = new CatalogSearchService([discogs, youTube], cache, NullLogger<CatalogSearchService>.Instance);
+
+        var act = () => service.SearchAsync("query", StreamingResultType.Track, CancellationToken.None);
+
+        await act.Should().ThrowAsync<StreamingProviderException>();
+    }
+
+    [Fact]
+    public async Task SearchAsync_ProviderDoesNotSupportTheType_IsNotCalled()
+    {
+        var discogs = NewProvider(ProviderCodes.Discogs);
+        discogs.Supports(StreamingResultType.Track).Returns(false);
+        var youTube = NewProvider(ProviderCodes.YouTube);
+        youTube.SearchAsync(Arg.Any<string>(), Arg.Any<StreamingResultType>(), Arg.Any<CancellationToken>()).Returns([NewResult("From YouTube")]);
+        var cache = Substitute.For<ISearchCandidateCache>();
+        cache.Store(Arg.Any<StreamingSearchResult>()).Returns("id");
+        var service = new CatalogSearchService([discogs, youTube], cache, NullLogger<CatalogSearchService>.Instance);
+
+        var candidates = await service.SearchAsync("query", StreamingResultType.Track, CancellationToken.None);
+
+        candidates.Should().ContainSingle();
+        await discogs.DidNotReceive().SearchAsync(Arg.Any<string>(), Arg.Any<StreamingResultType>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task SearchAsync_ProviderReturnsOtherTypes_KeepsOnlyTheRequestedType()
+    {
+        var provider = NewProvider(ProviderCodes.Spotify);
+        provider.SearchAsync(Arg.Any<string>(), Arg.Any<StreamingResultType>(), Arg.Any<CancellationToken>()).Returns(
+            [NewResult("A track", "spotify"), NewResult("An album", "spotify", StreamingResultType.Release)]);
+        var cache = Substitute.For<ISearchCandidateCache>();
+        cache.Store(Arg.Any<StreamingSearchResult>()).Returns("id");
+        var service = new CatalogSearchService([provider], cache, NullLogger<CatalogSearchService>.Instance);
+
+        var candidates = await service.SearchAsync("query", StreamingResultType.Release, CancellationToken.None);
+
+        candidates.Select(c => c.Result.Name).Should().Equal("An album");
     }
 
     [Fact]

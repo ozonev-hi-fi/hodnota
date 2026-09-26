@@ -59,6 +59,8 @@ public class ProviderTrustOrderTests
     {
         public string ProviderCode { get; } = providerCode;
 
+        public bool Supports(StreamingResultType type) => true;
+
         public Task<IReadOnlyList<StreamingSearchResult>> SearchAsync(string query, StreamingResultType type, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
     }

@@ -148,6 +148,15 @@ function SearchPage() {
           onActivate={handleActivate}
         />
       )}
+      {results.some((candidate) => candidate.platforms.includes('discogs')) && (
+        <p className="small text-muted mt-2">
+          Data provided by{' '}
+          <a href="https://www.discogs.com" target="_blank" rel="noreferrer">
+            Discogs
+          </a>
+          .
+        </p>
+      )}
     </>
   );
 }

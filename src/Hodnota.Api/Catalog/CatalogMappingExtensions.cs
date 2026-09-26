@@ -22,8 +22,12 @@ public static class CatalogMappingExtensions
         result.ArtistName,
         [.. result.Links.Select(link => new SharePageLinkResponse(link.PlatformCode, link.Url, link.PlatformType.ToContractType()))]);
 
-    public static StreamingResultType ToStreamingResultType(this CandidateType type) =>
-        type == CandidateType.Song ? StreamingResultType.Track : StreamingResultType.Release;
+    public static StreamingResultType ToStreamingResultType(this CandidateType type) => type switch
+    {
+        CandidateType.Song => StreamingResultType.Track,
+        CandidateType.Album => StreamingResultType.Release,
+        _ => throw new ArgumentOutOfRangeException(nameof(type), type, null),
+    };
 
     private static CandidateType ToCandidateType(this StreamingResultType type) =>
         type == StreamingResultType.Track ? CandidateType.Song : CandidateType.Album;

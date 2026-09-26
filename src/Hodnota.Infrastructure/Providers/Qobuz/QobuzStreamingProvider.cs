@@ -10,9 +10,11 @@ public sealed class QobuzStreamingProvider(QobuzApiClient apiClient) : IStreamin
 
     public string ProviderCode => ProviderCodes.Qobuz;
 
+    public bool Supports(StreamingResultType type) => true;
+
     public async Task<IReadOnlyList<StreamingSearchResult>> SearchAsync(string query, StreamingResultType type, CancellationToken cancellationToken)
     {
-        var response = await apiClient.SearchAsync(query, cancellationToken);
+        var response = await apiClient.SearchAsync(query, type, cancellationToken);
 
         return type == StreamingResultType.Track
             ? [.. (response.Tracks?.Items ?? []).Where(IsUsable).Select(ToSearchResult)]

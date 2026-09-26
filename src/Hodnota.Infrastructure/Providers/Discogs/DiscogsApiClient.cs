@@ -1,4 +1,3 @@
-using Hodnota.Application.Catalog;
 using Hodnota.Infrastructure.Providers;
 
 using Microsoft.AspNetCore.WebUtilities;
@@ -28,15 +27,8 @@ public sealed class DiscogsApiClient(IHttpClientFactory httpClientFactory, ILogg
             ["per_page"] = resultLimit.ToString(),
         };
 
-        HttpResponseMessage response;
-        try
-        {
-            response = await client.GetAsync(QueryHelpers.AddQueryString("database/search", queryParams), cancellationToken);
-        }
-        catch (HttpRequestException ex)
-        {
-            throw new StreamingProviderException("Discogs search request failed.", ex);
-        }
+        using var request = new HttpRequestMessage(HttpMethod.Get, QueryHelpers.AddQueryString("database/search", queryParams));
+        var response = await StreamingSearchResponseReader.SendAsync(client, request, "Discogs", cancellationToken);
 
         return await StreamingSearchResponseReader.ReadAsync(response, "Discogs", logger, () => new DiscogsSearchResponse(null), cancellationToken);
     }

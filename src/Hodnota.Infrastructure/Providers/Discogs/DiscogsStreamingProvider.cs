@@ -17,6 +17,8 @@ public sealed partial class DiscogsStreamingProvider(DiscogsApiClient apiClient)
 
     public string ProviderCode => ProviderCodes.Discogs;
 
+    public bool Supports(StreamingResultType type) => type == StreamingResultType.Release;
+
     public async Task<IReadOnlyList<StreamingSearchResult>> SearchAsync(string query, StreamingResultType type, CancellationToken cancellationToken)
     {
         if (type != StreamingResultType.Release)
@@ -24,11 +26,14 @@ public sealed partial class DiscogsStreamingProvider(DiscogsApiClient apiClient)
             return [];
         }
 
-        var mastersTask = apiClient.SearchMastersAsync(query, cancellationToken);
-        var releasesTask = apiClient.SearchReleasesAsync(query, cancellationToken);
-        await Task.WhenAll(mastersTask, releasesTask);
+        var masters = (await apiClient.SearchMastersAsync(query, cancellationToken)).Results ?? [];
+        if (masters.Count(IsUsable) >= MaxResults)
+        {
+            return Combine(masters, null);
+        }
 
-        return Combine((await mastersTask).Results, (await releasesTask).Results);
+        var releases = (await apiClient.SearchReleasesAsync(query, cancellationToken)).Results;
+        return Combine(masters, releases);
     }
 
     internal static IReadOnlyList<StreamingSearchResult> Combine(IReadOnlyList<DiscogsSearchResult>? masters, IReadOnlyList<DiscogsSearchResult>? releases) =>
@@ -81,8 +86,8 @@ public sealed partial class DiscogsStreamingProvider(DiscogsApiClient apiClient)
     {
         var descriptors = format ?? [];
         return Has(descriptors, "Compilation") ? ReleaseType.Compilation
-            : Has(descriptors, "Single") ? ReleaseType.Single
-            : Has(descriptors, "EP") ? ReleaseType.EP
+            : Has(descriptors, "Single") || Has(descriptors, "Maxi-Single") ? ReleaseType.Single
+            : Has(descriptors, "EP") || Has(descriptors, "Mini-Album") ? ReleaseType.EP
             : Has(descriptors, "Live") ? ReleaseType.Live
             : ReleaseType.Album;
     }

@@ -49,13 +49,6 @@ public sealed class SpotifyApiClient(
         using var request = new HttpRequestMessage(HttpMethod.Get, QueryHelpers.AddQueryString("search", queryParams));
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        try
-        {
-            return await client.SendAsync(request, cancellationToken);
-        }
-        catch (HttpRequestException ex)
-        {
-            throw new StreamingProviderException("Spotify search request failed.", ex);
-        }
+        return await StreamingSearchResponseReader.SendAsync(client, request, "Spotify", cancellationToken);
     }
 }

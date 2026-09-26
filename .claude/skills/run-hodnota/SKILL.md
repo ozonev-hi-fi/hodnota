@@ -95,7 +95,7 @@ curl -s "http://localhost:5173/api/auth/confirmEmail${QUERY}"
 TOKEN=$(curl -s -X POST http://localhost:5173/api/auth/login -H "Content-Type: application/json" \
   -d "{\"email\":\"$EMAIL\",\"password\":\"P@ssw0rd!123\"}" | grep -o '"accessToken":"[^"]*"' | cut -d'"' -f4)
 curl -s -X POST http://localhost:5173/api/catalog/search -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" -d '{"search":"nothing else matters"}'
+  -H "Authorization: Bearer $TOKEN" -d '{"search":"nothing else matters","type":"Song"}'
 ```
 
 Notes specific to this flow:
