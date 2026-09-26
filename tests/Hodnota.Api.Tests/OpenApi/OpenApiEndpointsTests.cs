@@ -65,6 +65,16 @@ public class OpenApiEndpointsTests(AuthApiFactory factory) : IClassFixture<AuthA
         operation.TryGetProperty("security", out var security).Should().Be(requiresAuth);
     }
 
+    [Fact]
+    public async Task Document_DescribesCandidateTypeAsItsNamesOnly()
+    {
+        using var document = await FetchOpenApiDocumentAsync();
+
+        var schema = document.RootElement.GetProperty("components").GetProperty("schemas").GetProperty("CandidateType");
+
+        schema.GetProperty("enum").EnumerateArray().Select(value => value.GetString()).Should().Equal("Song", "Album");
+    }
+
     private async Task<JsonDocument> FetchOpenApiDocumentAsync()
     {
         var response = await _client.GetStreamAsync("/openapi/v1.json");

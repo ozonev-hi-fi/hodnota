@@ -26,7 +26,8 @@ public sealed class PlatformConfiguration : IEntityTypeConfiguration<Platform>
             Seed("00000000-0000-0000-0000-000000000005", "Deezer", PlatformCodes.Deezer, PlatformType.StreamingService),
             Seed("00000000-0000-0000-0000-000000000006", "Apple Music", PlatformCodes.AppleMusic, PlatformType.StreamingService),
             Seed("00000000-0000-0000-0000-000000000007", "Bandcamp", PlatformCodes.Bandcamp, PlatformType.DigitalStore),
-            Seed("00000000-0000-0000-0000-000000000008", "Spotify", PlatformCodes.Spotify, PlatformType.StreamingService));
+            Seed("00000000-0000-0000-0000-000000000008", "Spotify", PlatformCodes.Spotify, PlatformType.StreamingService),
+            Seed("00000000-0000-0000-0000-000000000009", "Discogs", PlatformCodes.Discogs, PlatformType.Database));
     }
 
     private static Platform Seed(string id, string name, string code, PlatformType type) => new()

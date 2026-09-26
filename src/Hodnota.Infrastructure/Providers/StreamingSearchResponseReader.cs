@@ -8,11 +8,28 @@ using Microsoft.Extensions.Logging;
 
 namespace Hodnota.Infrastructure.Providers;
 
-// Shared response handling for every raw-HttpClient provider (Spotify, Qobuz, and future ones):
-// disposes the response, maps a 429 or any other non-success status and a JSON parse failure onto
-// StreamingProviderException, and falls back to emptyResult() for a valid-but-empty response body.
+// Shared request/response handling for every raw-HttpClient provider (Spotify, Qobuz, Discogs, and
+// future ones): maps a transport failure, a 429 or any other non-success status, and a JSON parse
+// failure onto StreamingProviderException; disposes the response, and falls back to emptyResult()
+// for a valid-but-empty response body.
 internal static class StreamingSearchResponseReader
 {
+    public static async Task<HttpResponseMessage> SendAsync(
+        HttpClient client,
+        HttpRequestMessage request,
+        string providerName,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await client.SendAsync(request, cancellationToken);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new StreamingProviderException($"{providerName} search request failed.", ex);
+        }
+    }
+
     public static async Task<T> ReadAsync<T>(
         HttpResponseMessage response,
         string providerName,

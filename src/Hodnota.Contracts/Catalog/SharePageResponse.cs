@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace Hodnota.Contracts.Catalog;
 
-[JsonConverter(typeof(JsonStringEnumConverter<PlatformType>))]
+[JsonConverter(typeof(StrictStringEnumConverter<PlatformType>))]
 public enum PlatformType
 {
     StreamingService,

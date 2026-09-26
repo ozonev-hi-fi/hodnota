@@ -38,7 +38,7 @@ public class CatalogEndpointsTests(CatalogApiFactory factory) : IClassFixture<Ca
                 [new ProviderLinkCandidate(PlatformCodes.YouTube, "search-1", new Uri("https://www.youtube.com/watch?v=search-1"))]),
         ];
 
-        var response = await _client.PostAsJsonAsync("/api/catalog/search", new SearchRequest("nothing"));
+        var response = await _client.PostAsJsonAsync("/api/catalog/search", new SearchRequest("nothing", CandidateType.Song));
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var candidates = await response.Content.ReadFromJsonAsync<List<SearchCandidateResponse>>();
@@ -70,7 +70,7 @@ public class CatalogEndpointsTests(CatalogApiFactory factory) : IClassFixture<Ca
                 [new ProviderLinkCandidate(PlatformCodes.YouTube, "yt-merge-1", new Uri("https://www.youtube.com/watch?v=yt-merge-1"))]),
         ];
 
-        var response = await _client.PostAsJsonAsync("/api/catalog/search", new SearchRequest("nothing"));
+        var response = await _client.PostAsJsonAsync("/api/catalog/search", new SearchRequest("nothing", CandidateType.Song));
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var candidates = await response.Content.ReadFromJsonAsync<List<SearchCandidateResponse>>();
@@ -114,7 +114,7 @@ public class CatalogEndpointsTests(CatalogApiFactory factory) : IClassFixture<Ca
         ];
         try
         {
-            var response = await _client.PostAsJsonAsync("/api/catalog/search", new SearchRequest("nothing"));
+            var response = await _client.PostAsJsonAsync("/api/catalog/search", new SearchRequest("nothing", CandidateType.Song));
 
             response.StatusCode.Should().Be(HttpStatusCode.OK);
             var candidates = await response.Content.ReadFromJsonAsync<List<SearchCandidateResponse>>();
@@ -144,7 +144,7 @@ public class CatalogEndpointsTests(CatalogApiFactory factory) : IClassFixture<Ca
         ];
         try
         {
-            var response = await _client.PostAsJsonAsync("/api/catalog/search", new SearchRequest("nothing"));
+            var response = await _client.PostAsJsonAsync("/api/catalog/search", new SearchRequest("nothing", CandidateType.Song));
 
             response.StatusCode.Should().Be(HttpStatusCode.OK);
             var candidates = await response.Content.ReadFromJsonAsync<List<SearchCandidateResponse>>();
@@ -160,17 +160,19 @@ public class CatalogEndpointsTests(CatalogApiFactory factory) : IClassFixture<Ca
     [Fact]
     public async Task Search_WhenAllProvidersFail_ReturnsBadRequest()
     {
+        factory.DiscogsProvider.ThrowProviderException = true;
         factory.QobuzProvider.ThrowProviderException = true;
         factory.SpotifyProvider.ThrowProviderException = true;
         factory.YouTubeProvider.ThrowProviderException = true;
         try
         {
-            var response = await _client.PostAsJsonAsync("/api/catalog/search", new SearchRequest("nothing"));
+            var response = await _client.PostAsJsonAsync("/api/catalog/search", new SearchRequest("nothing", CandidateType.Song));
 
             response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         }
         finally
         {
+            factory.DiscogsProvider.ThrowProviderException = false;
             factory.QobuzProvider.ThrowProviderException = false;
             factory.SpotifyProvider.ThrowProviderException = false;
             factory.YouTubeProvider.ThrowProviderException = false;
@@ -180,7 +182,7 @@ public class CatalogEndpointsTests(CatalogApiFactory factory) : IClassFixture<Ca
     [Fact]
     public async Task Search_WithoutAuth_ReturnsUnauthorized()
     {
-        var response = await _anonymousClient.PostAsJsonAsync("/api/catalog/search", new SearchRequest("nothing"));
+        var response = await _anonymousClient.PostAsJsonAsync("/api/catalog/search", new SearchRequest("nothing", CandidateType.Song));
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
@@ -201,7 +203,7 @@ public class CatalogEndpointsTests(CatalogApiFactory factory) : IClassFixture<Ca
                     new ProviderLinkCandidate(PlatformCodes.YouTubeMusic, "resolve-1", new Uri("https://music.youtube.com/watch?v=resolve-1")),
                 ]),
         ];
-        var searchResponse = await _client.PostAsJsonAsync("/api/catalog/search", new SearchRequest("nothing"));
+        var searchResponse = await _client.PostAsJsonAsync("/api/catalog/search", new SearchRequest("nothing", CandidateType.Song));
         var candidates = await searchResponse.Content.ReadFromJsonAsync<List<SearchCandidateResponse>>();
 
         var response = await _client.PostAsJsonAsync("/api/catalog/resolve", new ResolveRequest(candidates![0].Id));
@@ -240,7 +242,7 @@ public class CatalogEndpointsTests(CatalogApiFactory factory) : IClassFixture<Ca
                     new ProviderLinkCandidate(PlatformCodes.YouTubeMusic, "yt-resolve-1", new Uri("https://music.youtube.com/watch?v=yt-resolve-1")),
                 ]),
         ];
-        var searchResponse = await _client.PostAsJsonAsync("/api/catalog/search", new SearchRequest("nothing"));
+        var searchResponse = await _client.PostAsJsonAsync("/api/catalog/search", new SearchRequest("nothing", CandidateType.Song));
         var candidates = await searchResponse.Content.ReadFromJsonAsync<List<SearchCandidateResponse>>();
         candidates.Should().ContainSingle();
 
@@ -270,7 +272,7 @@ public class CatalogEndpointsTests(CatalogApiFactory factory) : IClassFixture<Ca
                     new ProviderLinkCandidate(PlatformCodes.YouTubeMusic, "yt-shared", new Uri("https://music.youtube.com/watch?v=yt-shared")),
                 ]),
         ];
-        var firstSearch = await _client.PostAsJsonAsync("/api/catalog/search", new SearchRequest("nothing"));
+        var firstSearch = await _client.PostAsJsonAsync("/api/catalog/search", new SearchRequest("nothing", CandidateType.Song));
         var firstCandidates = await firstSearch.Content.ReadFromJsonAsync<List<SearchCandidateResponse>>();
         await _client.PostAsJsonAsync("/api/catalog/resolve", new ResolveRequest(firstCandidates![0].Id));
 
@@ -285,7 +287,7 @@ public class CatalogEndpointsTests(CatalogApiFactory factory) : IClassFixture<Ca
                 null,
                 [new ProviderLinkCandidate(PlatformCodes.Spotify, "sp-shared", new Uri("https://open.spotify.com/track/sp-shared"))]),
         ];
-        var secondSearch = await _client.PostAsJsonAsync("/api/catalog/search", new SearchRequest("nothing"));
+        var secondSearch = await _client.PostAsJsonAsync("/api/catalog/search", new SearchRequest("nothing", CandidateType.Song));
         var secondCandidates = await secondSearch.Content.ReadFromJsonAsync<List<SearchCandidateResponse>>();
         secondCandidates.Should().ContainSingle();
 
@@ -317,9 +319,41 @@ public class CatalogEndpointsTests(CatalogApiFactory factory) : IClassFixture<Ca
     [Fact]
     public async Task Search_WithEmptySearch_ReturnsBadRequest()
     {
-        var response = await _client.PostAsJsonAsync("/api/catalog/search", new SearchRequest(""));
+        var response = await _client.PostAsJsonAsync("/api/catalog/search", new SearchRequest("", CandidateType.Song));
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Search_WithoutType_ReturnsBadRequest()
+    {
+        var response = await _client.PostAsJsonAsync("/api/catalog/search", new { search = "nothing" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(7)]
+    public async Task Search_WithIntegerType_ReturnsBadRequest(int type)
+    {
+        var response = await _client.PostAsJsonAsync("/api/catalog/search", new { search = "nothing", type });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Theory]
+    [InlineData(CandidateType.Song, StreamingResultType.Track)]
+    [InlineData(CandidateType.Album, StreamingResultType.Release)]
+    public async Task Search_PassesTheRequestedTypeToProviders(CandidateType requested, StreamingResultType expected)
+    {
+        factory.SpotifyProvider.Results = [];
+        factory.YouTubeProvider.Results = [];
+
+        var response = await _client.PostAsJsonAsync("/api/catalog/search", new SearchRequest("nothing", requested));
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        factory.YouTubeProvider.LastRequestedType.Should().Be(expected);
     }
 
     [Fact]
@@ -335,7 +369,7 @@ public class CatalogEndpointsTests(CatalogApiFactory factory) : IClassFixture<Ca
                 null,
                 [new ProviderLinkCandidate(PlatformCodes.YouTube, "get-1", new Uri("https://www.youtube.com/watch?v=get-1"))]),
         ];
-        var searchResponse = await _client.PostAsJsonAsync("/api/catalog/search", new SearchRequest("master"));
+        var searchResponse = await _client.PostAsJsonAsync("/api/catalog/search", new SearchRequest("master", CandidateType.Song));
         var candidates = await searchResponse.Content.ReadFromJsonAsync<List<SearchCandidateResponse>>();
         var resolveResponse = await _client.PostAsJsonAsync("/api/catalog/resolve", new ResolveRequest(candidates![0].Id));
         var created = await resolveResponse.Content.ReadFromJsonAsync<SharePageResponse>();

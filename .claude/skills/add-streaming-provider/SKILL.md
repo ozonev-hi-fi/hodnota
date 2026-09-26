@@ -35,7 +35,7 @@ None of these have a fixed answer across providers; each one is a real investiga
 |---|---|---|
 | 1 | `src/Hodnota.Application/Catalog/ProviderCodes.cs` | Always — one `public const string X = "x";` (lowercase-hyphenated). |
 | 2 | `src/Hodnota.Application/Catalog/ProviderTrustOrder.cs` | Always — insert into the single `Order` array at the position decided in Step 1.7. |
-| 3 | `src/Hodnota.Infrastructure/Providers/X/XStreamingProvider.cs` | Always — implements `IStreamingProvider` (`ProviderCode` + `SearchAsync`, unchanged since [decisions/0011](../../../docs/decisions/0011-spotify-provider-and-cross-provider-result-merging.md)). |
+| 3 | `src/Hodnota.Infrastructure/Providers/X/XStreamingProvider.cs` | Always — implements `IStreamingProvider`: `ProviderCode`, `Supports(StreamingResultType)` (which types the vendor can search — `true` for both unless it has no tracks or no albums, like Discogs), and `SearchAsync(query, type, ct)`, which must ask the vendor for the requested type only, not fetch both and filter ([decisions/0012](../../../docs/decisions/0012-discogs-provider.md)). |
 | 3a | `.../X/XConfiguration.cs` | Always — `const string` config-key literals, [decisions/0005](../../../docs/decisions/0005-auth-identity.md)'s convention; see `SpotifyConfiguration.cs`/`YouTubeConfiguration.cs`. |
 | 3b | `.../X/XCredentials.cs` | Raw-`HttpClient` path only (see `SpotifyCredentials.cs`). |
 | 3c | `.../X/XSearchDtos.cs` | Raw-`HttpClient` path only — wire DTOs for the vendor's JSON (see `SpotifySearchDtos.cs`). |

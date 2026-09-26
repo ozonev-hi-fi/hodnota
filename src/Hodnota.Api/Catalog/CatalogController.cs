@@ -19,7 +19,7 @@ public sealed class CatalogController(
         IReadOnlyList<CatalogSearchCandidate> candidates;
         try
         {
-            candidates = await searchService.SearchAsync(request.Search, cancellationToken);
+            candidates = await searchService.SearchAsync(request.Search, request.Type.ToStreamingResultType(), cancellationToken);
         }
         catch (StreamingProviderException)
         {

@@ -17,13 +17,20 @@ public class ProviderTrustOrderTests
     }
 
     [Fact]
-    public void Sort_AllThreeProvidersRegisteredOutOfOrder_ReturnsThemInTrustOrder()
+    public void Sort_AllFourProvidersRegisteredOutOfOrder_ReturnsThemInTrustOrder()
     {
-        var providers = new[] { NewProvider(ProviderCodes.YouTube), NewProvider(ProviderCodes.Spotify), NewProvider(ProviderCodes.Qobuz) };
+        var providers = new[]
+        {
+            NewProvider(ProviderCodes.YouTube),
+            NewProvider(ProviderCodes.Spotify),
+            NewProvider(ProviderCodes.Qobuz),
+            NewProvider(ProviderCodes.Discogs),
+        };
 
         var sorted = ProviderTrustOrder.Sort(providers);
 
-        sorted.Select(p => p.ProviderCode).Should().Equal(ProviderCodes.Qobuz, ProviderCodes.Spotify, ProviderCodes.YouTube);
+        sorted.Select(p => p.ProviderCode).Should().Equal(
+            ProviderCodes.Discogs, ProviderCodes.Qobuz, ProviderCodes.Spotify, ProviderCodes.YouTube);
     }
 
     [Fact]
@@ -52,7 +59,9 @@ public class ProviderTrustOrderTests
     {
         public string ProviderCode { get; } = providerCode;
 
-        public Task<IReadOnlyList<StreamingSearchResult>> SearchAsync(string query, CancellationToken cancellationToken) =>
+        public bool Supports(StreamingResultType type) => true;
+
+        public Task<IReadOnlyList<StreamingSearchResult>> SearchAsync(string query, StreamingResultType type, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
     }
 }

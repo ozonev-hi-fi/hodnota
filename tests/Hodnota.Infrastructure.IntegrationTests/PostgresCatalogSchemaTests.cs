@@ -34,6 +34,7 @@ public class PostgresCatalogSchemaTests(PostgresContainerFixture fixture) : ICla
             PlatformCodes.Deezer,
             PlatformCodes.AppleMusic,
             PlatformCodes.Bandcamp,
+            PlatformCodes.Discogs,
         ]);
 
         (await context.Platforms.AllAsync(p => p.IsActive)).Should().BeTrue();

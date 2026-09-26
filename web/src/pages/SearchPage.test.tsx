@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import { resolveCatalog, searchCatalog } from '../api/catalog.ts';
@@ -53,6 +53,25 @@ describe('SearchPage', () => {
     ).toBeInTheDocument();
   });
 
+  it('has Song pre-selected', () => {
+    renderPage();
+
+    expect(screen.getByLabelText('Song')).toBeChecked();
+    expect(screen.getByLabelText('Album')).not.toBeChecked();
+  });
+
+  it('searches for albums when Album is selected', async () => {
+    vi.mocked(searchCatalog).mockResolvedValue([]);
+    renderPage();
+
+    fireEvent.click(screen.getByLabelText('Album'));
+    search('black album');
+
+    await vi.waitFor(() =>
+      expect(searchCatalog).toHaveBeenCalledWith('black album', 'Album'),
+    );
+  });
+
   it('searches and renders the results', async () => {
     vi.mocked(searchCatalog).mockResolvedValue([
       {
@@ -69,7 +88,7 @@ describe('SearchPage', () => {
     search('nothing');
 
     expect(await screen.findByText('Nothing Else Matters')).toBeInTheDocument();
-    expect(searchCatalog).toHaveBeenCalledWith('nothing');
+    expect(searchCatalog).toHaveBeenCalledWith('nothing', 'Song');
   });
 
   it('shows the platforms a result was found on', async () => {
@@ -88,6 +107,47 @@ describe('SearchPage', () => {
     search('nothing');
 
     expect(await screen.findByText('Spotify · YouTube')).toBeInTheDocument();
+  });
+
+  it('shows a Discogs credit when a result was found on Discogs', async () => {
+    vi.mocked(searchCatalog).mockResolvedValue([
+      {
+        id: 'c1',
+        type: 'Album',
+        name: 'Nevermind',
+        artist: 'Nirvana',
+        imageUrl: null,
+        platforms: ['discogs', 'qobuz'],
+      },
+    ]);
+    renderPage();
+
+    search('nevermind');
+    await screen.findByText('Nevermind');
+
+    const credit = screen.getByText(/Data provided by/);
+    expect(
+      within(credit).getByRole('link', { name: 'Discogs' }),
+    ).toHaveAttribute('href', 'https://www.discogs.com');
+  });
+
+  it('does not show a Discogs credit when no result was found on Discogs', async () => {
+    vi.mocked(searchCatalog).mockResolvedValue([
+      {
+        id: 'c1',
+        type: 'Song',
+        name: 'Nothing Else Matters',
+        artist: 'Metallica',
+        imageUrl: null,
+        platforms: ['spotify', 'youtube'],
+      },
+    ]);
+    renderPage();
+
+    search('nothing');
+    await screen.findByText('Nothing Else Matters');
+
+    expect(screen.queryByText(/Data provided by/)).not.toBeInTheDocument();
   });
 
   it('shows an error message when search fails', async () => {

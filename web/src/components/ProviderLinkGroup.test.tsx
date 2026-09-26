@@ -18,11 +18,11 @@ describe('ProviderLinkGroup', () => {
     );
 
     expect(screen.getByRole('heading', { name: 'Listen' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'youtube' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'YouTube' })).toHaveAttribute(
       'href',
       'https://www.youtube.com/watch?v=1',
     );
-    expect(screen.getByRole('link', { name: 'youtube-music' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'YouTube Music' })).toHaveAttribute(
       'href',
       'https://music.youtube.com/watch?v=1',
     );
@@ -36,7 +36,7 @@ describe('ProviderLinkGroup', () => {
       />,
     );
 
-    expect(screen.getByRole('link', { name: 'bandcamp' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Bandcamp' })).toHaveAttribute(
       'target',
       '_blank',
     );

@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace Hodnota.Contracts.Catalog;
 
-[JsonConverter(typeof(JsonStringEnumConverter<CandidateType>))]
+[JsonConverter(typeof(StrictStringEnumConverter<CandidateType>))]
 public enum CandidateType
 {
     Song,

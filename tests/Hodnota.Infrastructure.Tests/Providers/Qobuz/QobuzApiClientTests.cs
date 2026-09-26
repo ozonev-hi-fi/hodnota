@@ -31,16 +31,18 @@ public class QobuzApiClientTests
         return (client, handler);
     }
 
-    [Fact]
-    public async Task SearchAsync_SendsQueryAndLimit()
+    [Theory]
+    [InlineData(StreamingResultType.Track, "track/search")]
+    [InlineData(StreamingResultType.Release, "album/search")]
+    public async Task SearchAsync_SendsQueryAndLimitToTheRequestedTypesEndpoint(StreamingResultType type, string expectedEndpoint)
     {
         var (client, handler) = NewClient();
         handler.Enqueue(SearchResponse());
 
-        await client.SearchAsync("nothing else matters", CancellationToken.None);
+        await client.SearchAsync("nothing else matters", type, CancellationToken.None);
 
         var request = handler.Requests.Should().ContainSingle().Subject;
-        request.RequestUri!.AbsolutePath.Should().EndWith("catalog/search");
+        request.RequestUri!.AbsolutePath.Should().EndWith(expectedEndpoint);
         var query = QueryHelpers.ParseQuery(request.RequestUri.Query);
         query["query"].ToString().Should().Be("nothing else matters");
         query["limit"].ToString().Should().Be("5");
@@ -53,7 +55,7 @@ public class QobuzApiClientTests
         var (client, handler) = NewClient();
         handler.Enqueue(SearchResponse());
 
-        await client.SearchAsync("metallica & friends?", CancellationToken.None);
+        await client.SearchAsync("metallica & friends?", StreamingResultType.Track, CancellationToken.None);
 
         var query = QueryHelpers.ParseQuery(handler.Requests[0].RequestUri!.Query);
         query["query"].ToString().Should().Be("metallica & friends?");
@@ -65,7 +67,7 @@ public class QobuzApiClientTests
         var (client, handler) = NewClient();
         handler.Enqueue(new HttpResponseMessage(HttpStatusCode.BadRequest));
 
-        var act = () => client.SearchAsync("query", CancellationToken.None);
+        var act = () => client.SearchAsync("query", StreamingResultType.Track, CancellationToken.None);
 
         await act.Should().ThrowAsync<StreamingProviderException>();
     }
@@ -78,7 +80,7 @@ public class QobuzApiClientTests
         tooManyRequests.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.FromSeconds(5));
         handler.Enqueue(tooManyRequests);
 
-        var act = () => client.SearchAsync("query", CancellationToken.None);
+        var act = () => client.SearchAsync("query", StreamingResultType.Track, CancellationToken.None);
 
         await act.Should().ThrowAsync<StreamingProviderException>();
         handler.Requests.Should().ContainSingle();
@@ -90,7 +92,7 @@ public class QobuzApiClientTests
         var (client, handler) = NewClient();
         handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("not json", System.Text.Encoding.UTF8, "application/json") });
 
-        var act = () => client.SearchAsync("query", CancellationToken.None);
+        var act = () => client.SearchAsync("query", StreamingResultType.Track, CancellationToken.None);
 
         await act.Should().ThrowAsync<StreamingProviderException>();
     }
@@ -101,7 +103,7 @@ public class QobuzApiClientTests
         var (client, handler) = NewClient();
         handler.Enqueue(SearchResponse());
 
-        var result = await client.SearchAsync("query", CancellationToken.None);
+        var result = await client.SearchAsync("query", StreamingResultType.Track, CancellationToken.None);
 
         result.Tracks!.Items.Should().BeEmpty();
         result.Albums!.Items.Should().BeEmpty();

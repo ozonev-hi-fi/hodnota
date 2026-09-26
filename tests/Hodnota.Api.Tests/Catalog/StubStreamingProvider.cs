@@ -11,8 +11,15 @@ public sealed class StubStreamingProvider(string providerCode) : IStreamingProvi
 
     public bool ThrowProviderException { get; set; }
 
-    public Task<IReadOnlyList<StreamingSearchResult>> SearchAsync(string query, CancellationToken cancellationToken) =>
-        ThrowProviderException
+    public StreamingResultType? LastRequestedType { get; private set; }
+
+    public bool Supports(StreamingResultType type) => true;
+
+    public Task<IReadOnlyList<StreamingSearchResult>> SearchAsync(string query, StreamingResultType type, CancellationToken cancellationToken)
+    {
+        LastRequestedType = type;
+        return ThrowProviderException
             ? throw new StreamingProviderException("Simulated provider failure.", new InvalidOperationException())
             : Task.FromResult<IReadOnlyList<StreamingSearchResult>>(Results);
+    }
 }
