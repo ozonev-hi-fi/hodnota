@@ -160,11 +160,7 @@ public class CatalogEndpointsTests(CatalogApiFactory factory) : IClassFixture<Ca
     [Fact]
     public async Task Search_WhenAllProvidersFail_ReturnsBadRequest()
     {
-        factory.DiscogsProvider.ThrowProviderException = true;
-        factory.QobuzProvider.ThrowProviderException = true;
-        factory.TidalProvider.ThrowProviderException = true;
-        factory.SpotifyProvider.ThrowProviderException = true;
-        factory.YouTubeProvider.ThrowProviderException = true;
+        SetAllProvidersThrowing(true);
         try
         {
             var response = await _client.PostAsJsonAsync("/api/catalog/search", new SearchRequest("nothing", CandidateType.Song));
@@ -173,11 +169,15 @@ public class CatalogEndpointsTests(CatalogApiFactory factory) : IClassFixture<Ca
         }
         finally
         {
-            factory.DiscogsProvider.ThrowProviderException = false;
-            factory.QobuzProvider.ThrowProviderException = false;
-            factory.TidalProvider.ThrowProviderException = false;
-            factory.SpotifyProvider.ThrowProviderException = false;
-            factory.YouTubeProvider.ThrowProviderException = false;
+            SetAllProvidersThrowing(false);
+        }
+
+        void SetAllProvidersThrowing(bool value)
+        {
+            foreach (var stub in factory.AllProviders)
+            {
+                stub.ThrowProviderException = value;
+            }
         }
     }
 

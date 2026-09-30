@@ -82,7 +82,7 @@ The logo requirement is not met by this. Adding brand logos is exactly the UI-pr
 
 ### Out of scope
 
-ISRC/UPC-based matching stays deferred. Tidal is the third provider that fills `Isrc`/`Upc`, but `SearchResultKey`/`SearchResultMerger` stay normalized-key-only, as in [decisions/0011](0011-spotify-provider-and-cross-provider-result-merging.md)'s Qobuz addendum; exact-match lookup belongs to the resolve-time enrichment work (future ADR 0014).
+ISRC/UPC-based matching stays deferred. Tidal is the third provider that fills `Isrc`/`Upc`, but `SearchResultKey`/`SearchResultMerger` stay normalized-key-only, as in [decisions/0011](0011-spotify-provider-and-cross-provider-result-merging.md)'s Qobuz addendum; exact-match lookup belongs to the resolve-time enrichment work (a future ADR).
 
 ## Consequences
 
@@ -92,5 +92,5 @@ ISRC/UPC-based matching stays deferred. Tidal is the third provider that fills `
 - The web `SharePage` and `SearchPage` gain a second provider credit line.
 - Tidal's Developer Terms allow only non-commercial applications. That fits the project today, but it limits the open [roadmap.md](../roadmap.md) LICENSE question: a later commercial path (such as the BUSL option) would have to drop Tidal or get separate permission. The ToS-review roadmap item now tracks this and the logo requirement.
 - Tidal's developer platform is in Beta and has changed its search contract without notice before. A future silent change shows up as Tidal results quietly disappearing (failure isolation turns the error into a log warning), not as a failed search.
-- [roadmap.md](../roadmap.md)'s Tidal sub-item is checked off, and the resolve-time enrichment item is renumbered to future ADR 0014.
+- [roadmap.md](../roadmap.md)'s Tidal sub-item is checked off, and the resolve-time enrichment item no longer reserves an ADR number (see [README.md](README.md)).
 - [architecture.md](../architecture.md)'s streaming-provider integration section gains a Tidal sentence.

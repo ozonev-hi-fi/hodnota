@@ -45,6 +45,10 @@ public sealed class CatalogApiFactory : WebApplicationFactory<Program>
 
     public StubStreamingProvider YouTubeProvider { get; } = new(ProviderCodes.YouTube);
 
+    // Highest trust first. The only list of stubs: ConfigureServices registers exactly these, and
+    // CatalogApiFactoryTests checks it covers every ProviderCodes constant.
+    public IReadOnlyList<StubStreamingProvider> AllProviders => [DiscogsProvider, QobuzProvider, TidalProvider, SpotifyProvider, YouTubeProvider];
+
     public CapturingEmailSender EmailSender { get; } = new();
 
     public CatalogApiFactory()
@@ -69,13 +73,13 @@ public sealed class CatalogApiFactory : WebApplicationFactory<Program>
         {
             services.RemoveAll<IStreamingProvider>();
             // Registered in reverse trust order deliberately, so endpoint tests that depend on
-            // Discogs-before-Qobuz-before-Tidal-before-Spotify-before-YouTube ordering prove
-            // ProviderTrustOrder.Sort is doing the sorting, not an accident of registration order.
-            services.AddSingleton<IStreamingProvider>(YouTubeProvider);
-            services.AddSingleton<IStreamingProvider>(SpotifyProvider);
-            services.AddSingleton<IStreamingProvider>(TidalProvider);
-            services.AddSingleton<IStreamingProvider>(QobuzProvider);
-            services.AddSingleton<IStreamingProvider>(DiscogsProvider);
+            // trust ordering prove ProviderTrustOrder.Sort is doing the sorting, not an accident
+            // of registration order.
+            foreach (var stub in AllProviders.Reverse())
+            {
+                services.AddSingleton<IStreamingProvider>(stub);
+            }
+
             services.RemoveAll<IEmailSender<ApplicationUser>>();
             services.AddSingleton<IEmailSender<ApplicationUser>>(EmailSender);
         });

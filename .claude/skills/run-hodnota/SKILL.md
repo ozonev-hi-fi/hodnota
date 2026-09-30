@@ -13,7 +13,8 @@ Verified in this session on **Windows (git-bash + PowerShell)**. The driver auto
 
 - .NET SDK — pinned in `global.json` (`10.0.400`, `rollForward: latestMajor`, so a newer installed 10.x SDK resolves fine — confirmed working on 10.0.401).
 - Node.js — version pinned in `web/.nvmrc` (24).
-- Docker (Rancher Desktop on this machine) — for the local Postgres dev container.
+- Docker (Rancher Desktop on this machine) — for the local Postgres dev container. Not strictly needed for a quick live check, see "Run without Docker" below.
+- Provider credentials in the gitignored `.env.local` (the API loads it itself — never read it as the agent). The API refuses to start without the fail-fast ones: `YouTube__ApiKey`, `Discogs__Token`, `Tidal__ClientId`, `Tidal__ClientSecret`. Optional ones (the provider is just not registered when unset): `Spotify__ClientId`/`Spotify__ClientSecret`, `Qobuz__AppId`/`Qobuz__UserToken`, `Tidal__CountryCode`. Tests need none of these — they use placeholder values and stub providers.
 
 ## Setup
 
@@ -102,9 +103,24 @@ Notes specific to this flow:
 - Login requires a confirmed email (`decisions/0009-auth-ui-search-share-web.md`) — `forgotPassword` also silently no-ops (200, but nothing sent) for an unconfirmed account.
 - `NoOpEmailSender` logs the confirmation link (rewritten to point at the SPA's `/confirm-email`, not the raw API — same ADR) and the password-reset **code** (not a link — there's no URL to click for reset) to the API log; grep it for `Confirmation link for` / `Password reset code for`.
 - `POST /api/catalog/search` and `/resolve` require the `Authorization` header (401 without it); `GET /api/catalog/sharepages/{id}` is deliberately anonymous — a real check is confirming that one works *without* the header.
-- Real search results come back from the actual YouTube Data API (not stubbed) when a valid `YouTube:ApiKey` is configured — expect real video titles/artists in the response.
+- Real search results come back from every registered provider's real API (not stubbed) — expect real titles/artists in the response, and a `platforms` list per row showing which providers matched.
 
 Stop both dev processes by port (`Get-NetTCPConnection -LocalPort 5009`/`5173` on Windows, `lsof` elsewhere) — see the Gotcha below about why matching by process name is riskier than it looks. This flow only ever touches `hodnota_agent` (via `run-agent-api.sh`) — see Cleanup below before finishing regardless, since `hodnota_agent` still accumulates its own cruft over time.
+
+## Run without Docker (live check only)
+
+When the Postgres container can't start (see Troubleshooting) and the check needs no persistent data — e.g. confirming a provider returns real results — run the API on a throwaway SQLite file outside the repo instead:
+
+```bash
+export Database__Provider=Sqlite ConnectionStrings__Default="Data Source=C:/tmp/hodnota-check.db"
+(cd src/Hodnota.Api && ASPNETCORE_ENVIRONMENT=Development nohup dotnet run --no-launch-profile --urls http://localhost:5299 > /tmp/hodnota-api-dev.log 2>&1 &)
+```
+
+- `--no-launch-profile --urls` (the same as `smoke.sh`) is what picks the port. Without it, `launchSettings.json`'s `applicationUrl` wins and the API listens on 5009 whatever `ASPNETCORE_URLS` says.
+- The API loads `.env.local` itself, so real provider credentials work without the agent ever reading them.
+- Drive it with the same register -> confirm email -> login -> search curl flow as above, against `http://localhost:5299` directly (no Vite).
+- Cleanup: stop the API by port (see Gotchas), then delete `C:/tmp/hodnota-check.db`. Nothing touches `hodnota` or `hodnota_agent`, so the Cleanup section below does not apply.
+- Not a substitute for the Postgres path when the change involves migrations: SQLite uses `EnsureCreatedAsync`, not `MigrateAsync` (`Program.cs`).
 
 ## Run (human path)
 
@@ -120,9 +136,11 @@ cd web && npm run dev   # http://localhost:5173, Ctrl-C to stop
 ## Test
 
 ```bash
-dotnet test    # 99 tests across 5 projects; Hodnota.Infrastructure.IntegrationTests needs Docker (Testcontainers)
-cd web && npm test   # 64 tests across 17 files (Vitest + React Testing Library)
+dotnet test    # all 5 test projects; Hodnota.Infrastructure.IntegrationTests needs Docker (Testcontainers)
+cd web && npm test   # Vitest + React Testing Library
 ```
+
+Without Docker, run the other four projects one by one (`tests/Hodnota.Domain.Tests`, `tests/Hodnota.Application.Tests`, `tests/Hodnota.Infrastructure.Tests`, `tests/Hodnota.Api.Tests`) and say that the integration tests were not run.
 
 None of this touches the persistent local dev database (SQLite in-memory or Testcontainers-Postgres, both ephemeral) — only manual verification does. See Cleanup below.
 
@@ -151,6 +169,8 @@ Do this before finishing any task that included manual verification through `run
 - **Stopping the Vite dev server by matching `Get-Process -Name node` is riskier than it looks.** That matches *every* Node process on the machine, not just Vite — including unrelated background tools (other dev servers, editor extensions, etc.). One session here ran `Get-Process -Name node | Stop-Process -Force` to clean up and it silently killed all Node processes system-wide. Find the specific PID by port instead (`Get-NetTCPConnection -LocalPort 5173 | Select-Object -ExpandProperty OwningProcess`) and stop only that.
 
 ## Troubleshooting
+
+- **`docker compose up -d` fails with `unable to get image 'postgres:18': ... failed to connect to the backend: timed out dialing Hyper-V socket`**: Rancher Desktop isn't running (the Docker CLI is there, the engine behind it isn't). Ask the user to start Rancher Desktop, or use "Run without Docker" above if the check doesn't need Postgres. The API then fails at startup with `Npgsql.NpgsqlException: Failed to connect to 127.0.0.1:5433` — same cause, not an app bug.
 
 - **`Missing 'ConnectionStrings__Default'`** thrown by `ApplicationDbContextFactory` (during `dotnet ef ...`): the repo-root `.env` wasn't found, or you're running from somewhere `TraversePath()`'s upward search can't reach. Confirm `.env` exists at the repo root.
 - **Smoke script's `register` call gets `curl: (7) Failed to connect`** even though `Waiting for readiness...` printed `Ready.`: almost certainly the `%{http_code}`-parsing readiness bug above (already fixed in this script) rather than the app actually being slow — if you see this after editing the readiness loop, check for that pattern first.

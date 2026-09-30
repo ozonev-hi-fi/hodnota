@@ -75,7 +75,7 @@ Search results show Discogs-sourced data too: Discogs is first in the trust orde
 
 ### Out of scope: resolve-time enrichment
 
-Today a share page is built from the links collected during search. The intended direction is different: search only helps the user find the item, and after the user picks a result, every provider is queried again for that exact artist + title (and, for Discogs, by the other providers' UPC — `barcode` search, then the release's master) to build a verified catalog entry once, which later visits reuse instead of searching again. That changes how catalog entities are created and is its own decision (a future ADR 0014), not part of adding Discogs.
+Today a share page is built from the links collected during search. The intended direction is different: search only helps the user find the item, and after the user picks a result, every provider is queried again for that exact artist + title (and, for Discogs, by the other providers' UPC — `barcode` search, then the release's master) to build a verified catalog entry once, which later visits reuse instead of searching again. That changes how catalog entities are created and is its own decision (a future ADR), not part of adding Discogs.
 
 Discogs artist-only and label-only search matches are also dropped, not approximated. `StreamingResultType` has only `Track`/`Release`; adding `Artist` (a `StreamingResultType.Artist` case, an `EfCatalogRepository.ResolveArtistAsync` branch, a `CandidateType.Artist` contract case) is deliberately deferred — the domain schema (`SharePage.ArtistId`, `ProviderLink.ArtistId`) is already waiting for it.
 
@@ -89,5 +89,5 @@ Discogs artist-only and label-only search matches are also dropped, not approxim
 - Discogs never sets `Upc`; releases whose only barcode source is Discogs have none until the enrichment step exists.
 - `ProviderTrustOrder.Order` gains `discogs` at index 0, ranked above Qobuz; this changes album-search merge priority and every merged album share page's visible link order.
 - The web `SharePage` and `SearchPage` gain their first provider-specific UI behavior (a Discogs attribution credit) — a deliberate, narrow exception justified by an actual contractual requirement, not a precedent for adding more per-provider UI without similarly concrete justification.
-- [roadmap.md](../roadmap.md)'s Discogs sub-item is checked off, and a new item names resolve-time enrichment (future ADR 0014).
+- [roadmap.md](../roadmap.md)'s Discogs sub-item is checked off, and a new item names resolve-time enrichment (a future ADR).
 - [architecture.md](../architecture.md)'s streaming-provider integration section gains a Discogs sentence alongside YouTube/Spotify/Qobuz.
