@@ -5,6 +5,7 @@ using Hodnota.Infrastructure;
 using Hodnota.Infrastructure.Providers.Discogs;
 using Hodnota.Infrastructure.Providers.Qobuz;
 using Hodnota.Infrastructure.Providers.Spotify;
+using Hodnota.Infrastructure.Providers.Tidal;
 using Hodnota.Infrastructure.Providers.YouTube;
 
 using Microsoft.Extensions.Configuration;
@@ -25,12 +26,14 @@ public class DependencyInjectionTests
                 [$"ConnectionStrings:{DatabaseConfiguration.ConnectionStringName}"] = "DataSource=:memory:",
                 [YouTubeConfiguration.ApiKeyConfigKey] = "test-key",
                 [DiscogsConfiguration.TokenConfigKey] = "test-token",
+                [TidalConfiguration.ClientIdConfigKey] = "test-client-id",
+                [TidalConfiguration.ClientSecretConfigKey] = "test-client-secret",
             })
             .AddInMemoryCollection(overrides)
             .Build();
 
     [Fact]
-    public void AddInfrastructure_WithoutSpotifyOrQobuzCredentials_RegistersOnlyYouTubeAndDiscogsProviders()
+    public void AddInfrastructure_WithoutSpotifyOrQobuzCredentials_RegistersOnlyTheFailFastProviders()
     {
         var configuration = BuildConfiguration(new Dictionary<string, string?>());
         var services = new ServiceCollection().AddInfrastructure(configuration);
@@ -38,7 +41,36 @@ public class DependencyInjectionTests
 
         var streamingProviders = provider.GetServices<IStreamingProvider>();
 
-        streamingProviders.Select(p => p.ProviderCode).Should().BeEquivalentTo([ProviderCodes.YouTube, ProviderCodes.Discogs]);
+        streamingProviders.Select(p => p.ProviderCode).Should().BeEquivalentTo([ProviderCodes.YouTube, ProviderCodes.Discogs, ProviderCodes.Tidal]);
+    }
+
+    [Theory]
+    [InlineData(TidalConfiguration.ClientIdConfigKey)]
+    [InlineData(TidalConfiguration.ClientSecretConfigKey)]
+    public void AddInfrastructure_WithoutTidalCredential_ThrowsWhenTidalCredentialsAreResolved(string missingKey)
+    {
+        var configuration = BuildConfiguration(new Dictionary<string, string?>
+        {
+            [missingKey] = null,
+        });
+        var services = new ServiceCollection().AddInfrastructure(configuration);
+        using var provider = services.BuildServiceProvider();
+
+        var act = () => provider.GetRequiredService<TidalCredentials>();
+
+        act.Should().Throw<InvalidOperationException>().WithMessage($"*{missingKey}*");
+    }
+
+    [Fact]
+    public void AddInfrastructure_TidalCountryCodeIsOptional()
+    {
+        var configuration = BuildConfiguration(new Dictionary<string, string?>());
+        var services = new ServiceCollection().AddInfrastructure(configuration);
+        using var provider = services.BuildServiceProvider();
+
+        var credentials = provider.GetRequiredService<TidalCredentials>();
+
+        credentials.CountryCode.Should().BeNull();
     }
 
     [Fact]
@@ -82,7 +114,7 @@ public class DependencyInjectionTests
 
         var streamingProviders = provider.GetServices<IStreamingProvider>();
 
-        streamingProviders.Select(p => p.ProviderCode).Should().BeEquivalentTo([ProviderCodes.YouTube, ProviderCodes.Discogs, ProviderCodes.Spotify]);
+        streamingProviders.Select(p => p.ProviderCode).Should().BeEquivalentTo([ProviderCodes.YouTube, ProviderCodes.Discogs, ProviderCodes.Tidal, ProviderCodes.Spotify]);
     }
 
     [Fact]
@@ -110,7 +142,7 @@ public class DependencyInjectionTests
 
         var streamingProviders = provider.GetServices<IStreamingProvider>();
 
-        streamingProviders.Select(p => p.ProviderCode).Should().BeEquivalentTo([ProviderCodes.YouTube, ProviderCodes.Discogs, ProviderCodes.Qobuz]);
+        streamingProviders.Select(p => p.ProviderCode).Should().BeEquivalentTo([ProviderCodes.YouTube, ProviderCodes.Discogs, ProviderCodes.Tidal, ProviderCodes.Qobuz]);
     }
 
     [Fact]

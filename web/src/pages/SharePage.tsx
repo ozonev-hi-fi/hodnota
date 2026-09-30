@@ -91,6 +91,9 @@ function SharePage() {
   const discogsLink = linksByCategory.Discover.find(
     (link) => link.platform === 'discogs',
   );
+  const tidalLink = linksByCategory.Listen.find(
+    (link) => link.platform === 'tidal',
+  );
 
   return (
     <>
@@ -110,6 +113,15 @@ function SharePage() {
           Data provided by{' '}
           <a href={discogsLink.url} target="_blank" rel="noreferrer">
             Discogs
+          </a>
+          .
+        </p>
+      )}
+      {tidalLink && (
+        <p className="small text-muted">
+          Content provided by{' '}
+          <a href={tidalLink.url} target="_blank" rel="noreferrer">
+            TIDAL
           </a>
           .
         </p>

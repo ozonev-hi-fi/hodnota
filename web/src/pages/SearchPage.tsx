@@ -157,6 +157,15 @@ function SearchPage() {
           .
         </p>
       )}
+      {results.some((candidate) => candidate.platforms.includes('tidal')) && (
+        <p className="small text-muted mt-2">
+          Content provided by{' '}
+          <a href="https://tidal.com" target="_blank" rel="noreferrer">
+            TIDAL
+          </a>
+          .
+        </p>
+      )}
     </>
   );
 }

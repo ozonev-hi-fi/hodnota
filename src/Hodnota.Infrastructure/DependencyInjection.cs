@@ -9,6 +9,7 @@ using Hodnota.Infrastructure.Identity;
 using Hodnota.Infrastructure.Providers.Discogs;
 using Hodnota.Infrastructure.Providers.Qobuz;
 using Hodnota.Infrastructure.Providers.Spotify;
+using Hodnota.Infrastructure.Providers.Tidal;
 using Hodnota.Infrastructure.Providers.YouTube;
 
 using Microsoft.AspNetCore.Identity;
@@ -100,6 +101,31 @@ public static class DependencyInjection
         });
         services.AddSingleton<DiscogsApiClient>();
         services.AddScoped<IStreamingProvider, DiscogsStreamingProvider>();
+
+        // Fail-fast like Discogs, deferred into the factory for the same reason.
+        services.AddSingleton(_ =>
+        {
+            var clientId = configuration[TidalConfiguration.ClientIdConfigKey];
+            var clientSecret = configuration[TidalConfiguration.ClientSecretConfigKey];
+            return string.IsNullOrEmpty(clientId)
+                ? throw new InvalidOperationException($"Missing required configuration value '{TidalConfiguration.ClientIdConfigKey}'.")
+                : string.IsNullOrEmpty(clientSecret)
+                    ? throw new InvalidOperationException($"Missing required configuration value '{TidalConfiguration.ClientSecretConfigKey}'.")
+                    : new TidalCredentials(clientId, clientSecret, configuration[TidalConfiguration.CountryCodeConfigKey]);
+        });
+        services.AddHttpClient(TidalConfiguration.AuthHttpClientName, client =>
+        {
+            client.BaseAddress = new Uri("https://auth.tidal.com/v1/");
+            client.Timeout = TimeSpan.FromSeconds(10);
+        });
+        services.AddHttpClient(TidalConfiguration.ApiHttpClientName, client =>
+        {
+            client.BaseAddress = new Uri("https://openapi.tidal.com/v2/");
+            client.Timeout = TimeSpan.FromSeconds(10);
+        });
+        services.AddSingleton<TidalAccessTokenProvider>();
+        services.AddSingleton<TidalApiClient>();
+        services.AddScoped<IStreamingProvider, TidalStreamingProvider>();
 
         // Spotify has required an active Premium subscription on the app-owner's account to use the
         // Web API at all since Feb 2026 (see ADR 0011's addendum) — unlike YouTube's key, that isn't

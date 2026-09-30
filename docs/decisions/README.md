@@ -8,6 +8,8 @@ Not every choice needs one. Write an ADR when a decision was non-obvious, was de
 
 One file per decision: `NNNN-short-title.md`, numbered sequentially, never renumbered or reused even if a decision is later superseded.
 
+Don't reserve a number in a forward reference ("future ADR 0013") — write "a future ADR". The number is taken when the file is created; another decision may well get there first.
+
 ```markdown
 # NNNN. Title
 

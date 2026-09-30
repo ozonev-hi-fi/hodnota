@@ -150,6 +150,48 @@ describe('SearchPage', () => {
     expect(screen.queryByText(/Data provided by/)).not.toBeInTheDocument();
   });
 
+  it('shows a TIDAL credit when a result was found on Tidal', async () => {
+    vi.mocked(searchCatalog).mockResolvedValue([
+      {
+        id: 'c1',
+        type: 'Song',
+        name: 'Nothing Else Matters',
+        artist: 'Metallica',
+        imageUrl: null,
+        platforms: ['qobuz', 'tidal'],
+      },
+    ]);
+    renderPage();
+
+    search('nothing');
+    await screen.findByText('Nothing Else Matters');
+
+    const credit = screen.getByText(/Content provided by/);
+    expect(within(credit).getByRole('link', { name: 'TIDAL' })).toHaveAttribute(
+      'href',
+      'https://tidal.com',
+    );
+  });
+
+  it('does not show a TIDAL credit when no result was found on Tidal', async () => {
+    vi.mocked(searchCatalog).mockResolvedValue([
+      {
+        id: 'c1',
+        type: 'Song',
+        name: 'Nothing Else Matters',
+        artist: 'Metallica',
+        imageUrl: null,
+        platforms: ['spotify', 'youtube'],
+      },
+    ]);
+    renderPage();
+
+    search('nothing');
+    await screen.findByText('Nothing Else Matters');
+
+    expect(screen.queryByText(/Content provided by/)).not.toBeInTheDocument();
+  });
+
   it('shows an error message when search fails', async () => {
     vi.mocked(searchCatalog).mockRejectedValue(
       new ApiError('The search provider is currently unavailable.', 400),
