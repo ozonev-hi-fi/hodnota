@@ -10,7 +10,14 @@ public sealed class QobuzStreamingProvider(QobuzApiClient apiClient) : IStreamin
 
     public string ProviderCode => ProviderCodes.Qobuz;
 
+    public IReadOnlyList<string> LinkPlatformCodes { get; } = [PlatformCodes.Qobuz];
+
     public bool Supports(StreamingResultType type) => true;
+
+    public bool SupportsLookup(StreamingResultType type) => false;
+
+    public Task<IReadOnlyList<StreamingSearchResult>> LookupAsync(StreamingLookupKey key, CancellationToken cancellationToken) =>
+        throw new NotSupportedException();
 
     public async Task<IReadOnlyList<StreamingSearchResult>> SearchAsync(string query, StreamingResultType type, CancellationToken cancellationToken)
     {

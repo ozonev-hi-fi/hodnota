@@ -11,4 +11,5 @@ public sealed record DiscogsSearchResult(
     [property: JsonPropertyName("title")] string? Title,
     [property: JsonPropertyName("format")] IReadOnlyList<string>? Format,
     [property: JsonPropertyName("master_id")] long? MasterId,
-    [property: JsonPropertyName("cover_image")] string? CoverImage);
+    [property: JsonPropertyName("cover_image")] string? CoverImage,
+    [property: JsonPropertyName("barcode")] IReadOnlyList<string>? Barcode = null);

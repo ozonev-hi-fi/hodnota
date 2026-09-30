@@ -17,7 +17,15 @@ public sealed class YouTubeStreamingProvider(YouTubeService youTubeService) : IS
 
     public string ProviderCode => ProviderCodes.YouTube;
 
+    public IReadOnlyList<string> LinkPlatformCodes { get; } = [PlatformCodes.YouTube, PlatformCodes.YouTubeMusic];
+
     public bool Supports(StreamingResultType type) => true;
+
+    // YouTube has no ISRC/UPC lookup and its search quota is small, so enrichment never calls it again.
+    public bool SupportsLookup(StreamingResultType type) => false;
+
+    public Task<IReadOnlyList<StreamingSearchResult>> LookupAsync(StreamingLookupKey key, CancellationToken cancellationToken) =>
+        throw new NotSupportedException();
 
     public async Task<IReadOnlyList<StreamingSearchResult>> SearchAsync(string query, StreamingResultType type, CancellationToken cancellationToken)
     {

@@ -19,7 +19,41 @@ public sealed class TidalStreamingProvider(TidalApiClient apiClient) : IStreamin
 
     public string ProviderCode => ProviderCodes.Tidal;
 
+    public IReadOnlyList<string> LinkPlatformCodes { get; } = [PlatformCodes.Tidal];
+
     public bool Supports(StreamingResultType type) => true;
+
+    public bool SupportsLookup(StreamingResultType type) => true;
+
+    public async Task<IReadOnlyList<StreamingSearchResult>> LookupAsync(StreamingLookupKey key, CancellationToken cancellationToken)
+    {
+        var isTrack = key.Type == StreamingResultType.Track;
+
+        foreach (var code in key.Codes)
+        {
+            var document = await apiClient.LookupAsync(code, key.Type, cancellationToken);
+            var included = IndexIncluded(document.Included);
+
+            List<StreamingSearchResult> matches =
+            [
+                .. (document.Data ?? [])
+                    .Where(IsUsable)
+                    .Where(resource => MatchesKey(resource, key))
+                    .Take(MaxResults)
+                    .Select(resource => isTrack ? ToTrackResult(resource, included) : ToAlbumResult(resource, included)),
+            ];
+            if (matches.Count > 0)
+            {
+                return matches;
+            }
+        }
+
+        return [];
+    }
+
+    internal static bool MatchesKey(TidalResource resource, StreamingLookupKey key) => key.Type == StreamingResultType.Track
+        ? CatalogKeys.NormalizeIsrc(resource.Attributes?.Isrc) is { } isrc && key.Codes.Contains(isrc)
+        : CatalogKeys.BarcodeVariants(resource.Attributes?.BarcodeId).Any(key.Codes.Contains);
 
     public async Task<IReadOnlyList<StreamingSearchResult>> SearchAsync(string query, StreamingResultType type, CancellationToken cancellationToken)
     {

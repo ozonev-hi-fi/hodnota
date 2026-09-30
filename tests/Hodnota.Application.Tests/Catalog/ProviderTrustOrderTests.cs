@@ -60,7 +60,14 @@ public class ProviderTrustOrderTests
     {
         public string ProviderCode { get; } = providerCode;
 
+        public IReadOnlyList<string> LinkPlatformCodes { get; } = [providerCode];
+
         public bool Supports(StreamingResultType type) => true;
+
+        public bool SupportsLookup(StreamingResultType type) => false;
+
+        public Task<IReadOnlyList<StreamingSearchResult>> LookupAsync(StreamingLookupKey key, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
 
         public Task<IReadOnlyList<StreamingSearchResult>> SearchAsync(string query, StreamingResultType type, CancellationToken cancellationToken) =>
             throw new NotSupportedException();

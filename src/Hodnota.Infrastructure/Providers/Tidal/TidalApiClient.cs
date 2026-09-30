@@ -19,25 +19,40 @@ public sealed class TidalApiClient(
     private const string TrackIncludes = "tracks,tracks.artists,tracks.albums.coverArt";
     private const string AlbumIncludes = "albums,albums.artists,albums.coverArt";
 
-    public async Task<TidalSearchDocument> SearchAsync(string query, StreamingResultType type, CancellationToken cancellationToken)
+    // A lookup answers with the tracks/albums themselves, so the include paths start one level lower.
+    private const string TrackLookupIncludes = "artists,albums,albums.coverArt";
+    private const string AlbumLookupIncludes = "artists,coverArt";
+
+    public Task<TidalSearchDocument> SearchAsync(string query, StreamingResultType type, CancellationToken cancellationToken) =>
+        GetAsync(
+            $"searchResults?filter%5Bquery%5D={Uri.EscapeDataString(query)}&include={(type == StreamingResultType.Track ? TrackIncludes : AlbumIncludes)}",
+            cancellationToken);
+
+    public Task<TidalSearchDocument> LookupAsync(string code, StreamingResultType type, CancellationToken cancellationToken) =>
+        GetAsync(
+            type == StreamingResultType.Track
+                ? $"tracks?filter%5Bisrc%5D={Uri.EscapeDataString(code)}&include={TrackLookupIncludes}"
+                : $"albums?filter%5BbarcodeId%5D={Uri.EscapeDataString(code)}&include={AlbumLookupIncludes}",
+            cancellationToken);
+
+    private async Task<TidalSearchDocument> GetAsync(string uri, CancellationToken cancellationToken)
     {
-        var response = await SendSearchRequestAsync(query, type, cancellationToken);
+        var response = await SendRequestAsync(uri, cancellationToken);
         if (response.StatusCode == HttpStatusCode.Unauthorized)
         {
             response.Dispose();
             tokenProvider.Invalidate();
-            response = await SendSearchRequestAsync(query, type, cancellationToken);
+            response = await SendRequestAsync(uri, cancellationToken);
         }
 
         return await StreamingSearchResponseReader.ReadAsync(response, "Tidal", logger, () => new TidalSearchDocument(null, null), cancellationToken);
     }
 
-    private async Task<HttpResponseMessage> SendSearchRequestAsync(string query, StreamingResultType type, CancellationToken cancellationToken)
+    private async Task<HttpResponseMessage> SendRequestAsync(string uri, CancellationToken cancellationToken)
     {
         var client = httpClientFactory.CreateClient(TidalConfiguration.ApiHttpClientName);
         var token = await tokenProvider.GetTokenAsync(cancellationToken);
 
-        var uri = $"searchResults?filter%5Bquery%5D={Uri.EscapeDataString(query)}&include={(type == StreamingResultType.Track ? TrackIncludes : AlbumIncludes)}";
         if (!string.IsNullOrEmpty(credentials.CountryCode))
         {
             uri += $"&countryCode={Uri.EscapeDataString(credentials.CountryCode)}";

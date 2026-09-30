@@ -26,7 +26,7 @@ internal static class StreamingSearchResponseReader
         }
         catch (HttpRequestException ex)
         {
-            throw new StreamingProviderException($"{providerName} search request failed.", ex);
+            throw new StreamingProviderException($"{providerName} request failed.", ex);
         }
     }
 
@@ -41,14 +41,14 @@ internal static class StreamingSearchResponseReader
         {
             if (response.StatusCode == HttpStatusCode.TooManyRequests)
             {
-                logger.LogWarning("{Provider} search was rate-limited; Retry-After: {RetryAfter}.", providerName, response.Headers.RetryAfter?.Delta);
-                throw new StreamingProviderException($"{providerName} search was rate-limited.", new HttpRequestException("429 Too Many Requests"));
+                logger.LogWarning("{Provider} was rate-limited; Retry-After: {RetryAfter}.", providerName, response.Headers.RetryAfter?.Delta);
+                throw new StreamingProviderException($"{providerName} was rate-limited.", new HttpRequestException("429 Too Many Requests"));
             }
 
             if (!response.IsSuccessStatusCode)
             {
                 throw new StreamingProviderException(
-                    $"{providerName} search request failed with status {(int)response.StatusCode}.",
+                    $"{providerName} request failed with status {(int)response.StatusCode}.",
                     new HttpRequestException(response.ReasonPhrase));
             }
 
@@ -58,7 +58,7 @@ internal static class StreamingSearchResponseReader
             }
             catch (JsonException ex)
             {
-                throw new StreamingProviderException($"{providerName} search response could not be parsed.", ex);
+                throw new StreamingProviderException($"{providerName} response could not be parsed.", ex);
             }
         }
         finally

@@ -222,6 +222,8 @@ describe('SearchPage', () => {
       name: 'Track',
       artist: 'Artist',
       links: [],
+      platforms: [],
+      isComplete: true,
     });
     renderPage();
 

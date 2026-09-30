@@ -304,6 +304,63 @@ namespace Hodnota.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Hodnota.Domain.Catalog.ProviderCheck", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ArtistId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CheckedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("PlatformId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ReleaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TrackId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ArtistId");
+
+                    b.HasIndex("ReleaseId");
+
+                    b.HasIndex("TrackId");
+
+                    b.HasIndex("PlatformId", "ArtistId")
+                        .IsUnique()
+                        .HasFilter("\"ArtistId\" IS NOT NULL");
+
+                    b.HasIndex("PlatformId", "ReleaseId")
+                        .IsUnique()
+                        .HasFilter("\"ReleaseId\" IS NOT NULL");
+
+                    b.HasIndex("PlatformId", "TrackId")
+                        .IsUnique()
+                        .HasFilter("\"TrackId\" IS NOT NULL");
+
+                    b.ToTable("ProviderChecks", t =>
+                        {
+                            t.HasCheckConstraint("CK_ProviderCheck_ExactlyOneTarget", "(CASE WHEN \"ArtistId\" IS NOT NULL THEN 1 ELSE 0 END) +\n(CASE WHEN \"ReleaseId\" IS NOT NULL THEN 1 ELSE 0 END) +\n(CASE WHEN \"TrackId\" IS NOT NULL THEN 1 ELSE 0 END) = 1");
+                        });
+                });
+
             modelBuilder.Entity("Hodnota.Domain.Catalog.ProviderLink", b =>
                 {
                     b.Property<Guid>("Id")
@@ -820,6 +877,38 @@ namespace Hodnota.Infrastructure.Migrations
                     b.Navigation("Artist");
 
                     b.Navigation("Genre");
+
+                    b.Navigation("Release");
+
+                    b.Navigation("Track");
+                });
+
+            modelBuilder.Entity("Hodnota.Domain.Catalog.ProviderCheck", b =>
+                {
+                    b.HasOne("Hodnota.Domain.Catalog.Artist", "Artist")
+                        .WithMany()
+                        .HasForeignKey("ArtistId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("Hodnota.Domain.Catalog.Platform", "Platform")
+                        .WithMany()
+                        .HasForeignKey("PlatformId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Hodnota.Domain.Catalog.Release", "Release")
+                        .WithMany()
+                        .HasForeignKey("ReleaseId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("Hodnota.Domain.Catalog.Track", "Track")
+                        .WithMany()
+                        .HasForeignKey("TrackId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("Artist");
+
+                    b.Navigation("Platform");
 
                     b.Navigation("Release");
 

@@ -35,7 +35,7 @@ public class EfCatalogRepositoryConcurrencyTests(PostgresContainerFixture fixtur
     }
 
     [Fact]
-    public async Task CreateSharePageAsync_ConcurrentResolveForSameExternalId_ProducesExactlyOneTrack()
+    public async Task ResolveSharePageAsync_ConcurrentResolveForSameExternalId_ProducesExactlyOneTrack()
     {
         await using (var migrateContext = new ApplicationDbContext(Options))
         {
@@ -60,12 +60,12 @@ public class EfCatalogRepositoryConcurrencyTests(PostgresContainerFixture fixtur
         var repository2 = new EfCatalogRepository(context2);
 
         await Task.WhenAll(
-            repository1.CreateSharePageAsync(result, CancellationToken.None),
-            repository2.CreateSharePageAsync(result, CancellationToken.None));
+            repository1.ResolveSharePageAsync(result, CancellationToken.None),
+            repository2.ResolveSharePageAsync(result, CancellationToken.None));
 
         await using var verifyContext = new ApplicationDbContext(Options);
         (await verifyContext.Tracks.CountAsync(t => t.Title == title)).Should().Be(1);
         (await verifyContext.ProviderLinks.CountAsync(pl => pl.ExternalId == suffix)).Should().Be(2);
-        (await verifyContext.SharePages.CountAsync(sp => sp.Track!.Title == title)).Should().Be(2);
+        (await verifyContext.SharePages.CountAsync(sp => sp.Track!.Title == title)).Should().Be(1);
     }
 }

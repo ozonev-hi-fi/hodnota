@@ -8,38 +8,37 @@ using Npgsql;
 
 namespace Hodnota.Infrastructure.Catalog;
 
-public sealed class EfCatalogRepository(ApplicationDbContext dbContext) : ICatalogRepository
+public sealed class EfCatalogRepository(ApplicationDbContext dbContext, TimeProvider? timeProvider = null) : ICatalogRepository
 {
     private const string ProviderLinkExternalIdIndexName = "IX_ProviderLinks_PlatformId_ExternalId";
     private const string TrackIsrcIndexName = "IX_Tracks_Isrc";
     private const string ReleaseUpcIndexName = "IX_Releases_Upc";
+    private const double ExactMatchConfidence = 1.0;
+    private const double NameMatchConfidence = 0.5;
 
-    public async Task<SharePageResult> CreateSharePageAsync(StreamingSearchResult result, CancellationToken cancellationToken)
+    private readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
+
+    public async Task<SharePageResult> ResolveSharePageAsync(StreamingSearchResult result, CancellationToken cancellationToken)
     {
-        // Each conflict type is only retried on the first two attempts, so a retry that hits the
-        // *other* conflict type (e.g. the ProviderLink retry then collides on Isrc/Upc, or vice
-        // versa) is still resolved instead of crashing, while a persistent, unrelated failure still
-        // surfaces after two retries rather than looping forever.
+        // A concurrent resolve of the same item saved first and took the provider link or the
+        // ISRC/UPC, or two of them waited on each other's unique keys and Postgres ended one as the
+        // deadlock victim. The retry finds that item and its share page instead of creating them
+        // again. A persistent, unrelated failure still surfaces after two retries rather than looping.
         for (var attempt = 0; ; attempt++)
         {
             try
             {
-                return await CreateSharePageCoreAsync(result, cancellationToken);
+                return await ResolveSharePageCoreAsync(result, cancellationToken);
             }
-            catch (DbUpdateException ex) when (attempt < 2 && IsProviderLinkExternalIdConflict(ex))
+            catch (DbUpdateException ex) when (attempt < 2 && (IsProviderLinkExternalIdConflict(ex) || IsNaturalKeyConflict(ex) || IsDeadlock(ex)))
             {
                 dbContext.ChangeTracker.Clear();
-            }
-            catch (DbUpdateException ex) when (attempt < 2 && IsNaturalKeyConflict(ex))
-            {
-                // A different, unlinked provider result already created a Track/Release with this same
-                // Isrc/Upc. Retrying without the natural key avoids a crash; it does not merge into
-                // that existing entity.
-                dbContext.ChangeTracker.Clear();
-                result = result with { Isrc = null, Upc = null };
             }
         }
     }
+
+    internal static bool IsDeadlock(DbUpdateException ex) =>
+        ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.DeadlockDetected };
 
     internal static bool IsProviderLinkExternalIdConflict(DbUpdateException ex) => ex.InnerException switch
     {
@@ -55,8 +54,11 @@ public sealed class EfCatalogRepository(ApplicationDbContext dbContext) : ICatal
         _ => false,
     };
 
-    private async Task<SharePageResult> CreateSharePageCoreAsync(StreamingSearchResult result, CancellationToken cancellationToken)
+    private async Task<SharePageResult> ResolveSharePageCoreAsync(StreamingSearchResult result, CancellationToken cancellationToken)
     {
+        var upcVariants = CatalogKeys.BarcodeVariants(result.Upc);
+        result = result with { Isrc = CatalogKeys.NormalizeIsrc(result.Isrc), Upc = CatalogKeys.NormalizeBarcode(result.Upc) };
+
         var platformsByCode = await dbContext.Platforms
             .Where(p => result.Links.Select(l => l.PlatformCode).Contains(p.Code))
             .ToDictionaryAsync(p => p.Code, cancellationToken);
@@ -65,27 +67,16 @@ public sealed class EfCatalogRepository(ApplicationDbContext dbContext) : ICatal
         var existingLink = FindExistingProviderLink(result.Links, platformsByCode, existingLinksByKey);
 
         var resolution = result.Type == StreamingResultType.Track
-            ? await ResolveTrackAsync(result, existingLink?.TrackId, platformsByCode, existingLinksByKey, cancellationToken)
-            : await ResolveReleaseAsync(result, existingLink?.ReleaseId, platformsByCode, existingLinksByKey, cancellationToken);
+            ? await ResolveTrackAsync(result, existingLink?.TrackId ?? await FindTrackIdByIsrcAsync(result.Isrc, cancellationToken), platformsByCode, existingLinksByKey, cancellationToken)
+            : await ResolveReleaseAsync(result, existingLink?.ReleaseId ?? await FindReleaseIdByUpcAsync(upcVariants, cancellationToken), platformsByCode, existingLinksByKey, cancellationToken);
 
-        var sharePage = result.Type == StreamingResultType.Track
-            ? new SharePage { TrackId = resolution.EntityId }
-            : new SharePage { ReleaseId = resolution.EntityId };
-        dbContext.SharePages.Add(sharePage);
-
-        for (var order = 0; order < resolution.ProviderLinks.Count; order++)
-        {
-            dbContext.SharePageLinks.Add(new SharePageLink { SharePage = sharePage, ProviderLink = resolution.ProviderLinks[order], DisplayOrder = order });
-        }
+        var sharePage = await FindOrCreateSharePageAsync(result.Type, resolution, cancellationToken);
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        return new SharePageResult(
-            sharePage.Id,
-            result.Type,
-            resolution.Name,
-            resolution.ArtistName,
-            [.. resolution.ProviderLinks.Select(pl => new SharePageLinkResult(pl.Platform.Code, pl.ExternalUrl, pl.Platform.Type))]);
+        // Cleared so the filtered Include below reads the saved state, not tracked hidden links.
+        dbContext.ChangeTracker.Clear();
+        return (await GetSharePageAsync(sharePage.Id, cancellationToken))!;
     }
 
     public async Task<SharePageResult?> GetSharePageAsync(Guid id, CancellationToken cancellationToken)
@@ -118,6 +109,234 @@ public sealed class EfCatalogRepository(ApplicationDbContext dbContext) : ICatal
             [.. sharePage.Links.Select(l => new SharePageLinkResult(l.ProviderLink.Platform.Code, l.ProviderLink.ExternalUrl, l.ProviderLink.Platform.Type))]);
     }
 
+    public async Task<IReadOnlyList<PlatformCheckResult>> GetPlatformChecksAsync(Guid sharePageId, CancellationToken cancellationToken)
+    {
+        var target = await FindTargetAsync(sharePageId, cancellationToken);
+        if (target is null)
+        {
+            return [];
+        }
+
+        var (trackId, releaseId) = target.Value;
+        var checks = await dbContext.ProviderChecks.Include(pc => pc.Platform)
+            .Where(pc => pc.TrackId == trackId && pc.ReleaseId == releaseId)
+            .ToListAsync(cancellationToken);
+        var links = await FetchProviderLinksAsync(trackId, releaseId, cancellationToken);
+
+        return [.. checks.Select(check => new PlatformCheckResult(
+            check.Platform.Code,
+            check.Outcome,
+            links.FirstOrDefault(link => link.PlatformId == check.PlatformId)?.ExternalUrl))];
+    }
+
+    public async Task<IReadOnlyDictionary<string, PlatformType>> GetPlatformTypesAsync(IReadOnlyCollection<string> platformCodes, CancellationToken cancellationToken) =>
+        await dbContext.Platforms.AsNoTracking()
+            .Where(p => platformCodes.Contains(p.Code))
+            .ToDictionaryAsync(p => p.Code, p => p.Type, cancellationToken);
+
+    public async Task<EnrichmentRequest?> GetEnrichmentRequestAsync(Guid sharePageId, CancellationToken cancellationToken)
+    {
+        var page = await dbContext.SharePages
+            .Include(sp => sp.Track)
+            .Include(sp => sp.Release)
+            .FirstOrDefaultAsync(sp => sp.Id == sharePageId, cancellationToken);
+        if (page is null)
+        {
+            return null;
+        }
+
+        var links = await FetchProviderLinksAsync(page.TrackId, page.ReleaseId, cancellationToken);
+        var artistName = await GetMainArtistNameAsync(page.TrackId, page.ReleaseId, cancellationToken);
+
+        return new EnrichmentRequest(
+            page.TrackId is not null ? StreamingResultType.Track : StreamingResultType.Release,
+            page.Track?.Title ?? page.Release!.Title,
+            artistName,
+            page.Track?.Isrc,
+            page.Release?.Upc,
+            [.. links.Select(link => new ProviderLinkCandidate(link.Platform.Code, link.ExternalId, link.ExternalUrl))]);
+    }
+
+    public async Task<IReadOnlyList<PlatformCheckResult>> SaveEnrichmentAsync(Guid sharePageId, ProviderEnrichment enrichment, CancellationToken cancellationToken)
+    {
+        var target = await FindTargetAsync(sharePageId, cancellationToken);
+        if (target is null)
+        {
+            return [];
+        }
+
+        var (trackId, releaseId) = target.Value;
+        var now = _clock.GetUtcNow();
+
+        var codes = enrichment.PlatformCodes.Concat(enrichment.Links.Select(l => l.PlatformCode)).Distinct().ToList();
+        var platformsByCode = await dbContext.Platforms.Where(p => codes.Contains(p.Code)).ToDictionaryAsync(p => p.Code, cancellationToken);
+        var entityLinks = await FetchProviderLinksAsync(trackId, releaseId, cancellationToken);
+        var outcomes = enrichment.PlatformCodes.ToDictionary(code => code, _ => enrichment.Outcome);
+        var newLinks = new List<ProviderLink>();
+
+        if (enrichment.Outcome is LookupOutcome.ExactMatch or LookupOutcome.NameMatch)
+        {
+            // One link per platform: a second candidate for the same platform would break the unique index.
+            foreach (var candidate in enrichment.Links.DistinctBy(link => link.PlatformCode))
+            {
+                var platform = GetPlatform(platformsByCode, candidate.PlatformCode);
+                var current = entityLinks.FirstOrDefault(link => link.PlatformId == platform.Id);
+                var isExact = enrichment.Outcome == LookupOutcome.ExactMatch;
+
+                if (current is null)
+                {
+                    if (await IsProviderLinkTakenAsync(platform.Id, candidate.ExternalId, cancellationToken))
+                    {
+                        // The same platform item is already linked to a different catalog entity.
+                        outcomes[candidate.PlatformCode] = LookupOutcome.NotFound;
+                        continue;
+                    }
+
+                    newLinks.Add(new ProviderLink
+                    {
+                        TrackId = trackId,
+                        ReleaseId = releaseId,
+                        Platform = platform,
+                        ExternalId = candidate.ExternalId,
+                        ExternalUrl = candidate.ExternalUrl,
+                        Confidence = isExact ? ExactMatchConfidence : NameMatchConfidence,
+                        LastVerifiedUtc = now,
+                    });
+                }
+                else if (current.ExternalId == candidate.ExternalId)
+                {
+                    current.Confidence = isExact ? ExactMatchConfidence : current.Confidence ?? NameMatchConfidence;
+                    current.LastVerifiedUtc = now;
+                }
+                else if (isExact)
+                {
+                    if (await IsProviderLinkTakenAsync(platform.Id, candidate.ExternalId, cancellationToken))
+                    {
+                        outcomes[candidate.PlatformCode] = LookupOutcome.NameMatch;
+                        continue;
+                    }
+
+                    current.ExternalId = candidate.ExternalId;
+                    current.ExternalUrl = candidate.ExternalUrl;
+                    current.Confidence = ExactMatchConfidence;
+                    current.LastVerifiedUtc = now;
+                }
+                else
+                {
+                    outcomes[candidate.PlatformCode] = LookupOutcome.NameMatch;
+                }
+            }
+        }
+
+        dbContext.ProviderLinks.AddRange(newLinks);
+        if (newLinks.Count > 0)
+        {
+            var pages = await dbContext.SharePages.Include(sp => sp.Links)
+                .Where(sp => sp.TrackId == trackId && sp.ReleaseId == releaseId)
+                .ToListAsync(cancellationToken);
+            foreach (var page in pages)
+            {
+                var order = page.Links.Count == 0 ? 0 : page.Links.Max(l => l.DisplayOrder) + 1;
+                foreach (var link in newLinks)
+                {
+                    dbContext.SharePageLinks.Add(new SharePageLink { SharePage = page, ProviderLink = link, DisplayOrder = order++ });
+                }
+            }
+        }
+
+        var existingChecks = await dbContext.ProviderChecks
+            .Where(pc => pc.TrackId == trackId && pc.ReleaseId == releaseId)
+            .ToListAsync(cancellationToken);
+        foreach (var (code, outcome) in outcomes)
+        {
+            var platform = GetPlatform(platformsByCode, code);
+            var check = existingChecks.FirstOrDefault(pc => pc.PlatformId == platform.Id);
+            if (check is null)
+            {
+                dbContext.ProviderChecks.Add(new ProviderCheck { TrackId = trackId, ReleaseId = releaseId, Platform = platform, Outcome = outcome, CheckedAtUtc = now });
+            }
+            else
+            {
+                check.Outcome = outcome;
+                check.CheckedAtUtc = now;
+            }
+        }
+
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            // Another writer got there first. Dropping the failed changes lets the caller's next
+            // save on this context start clean.
+            dbContext.ChangeTracker.Clear();
+            throw;
+        }
+
+        var linksAfter = entityLinks.Concat(newLinks).ToList();
+        return [.. outcomes.Select(pair => new PlatformCheckResult(
+            pair.Key,
+            pair.Value,
+            linksAfter.FirstOrDefault(link => link.PlatformId == platformsByCode[pair.Key].Id)?.ExternalUrl))];
+    }
+
+    private async Task<(Guid? TrackId, Guid? ReleaseId)?> FindTargetAsync(Guid sharePageId, CancellationToken cancellationToken)
+    {
+        var page = await dbContext.SharePages.AsNoTracking()
+            .Where(sp => sp.Id == sharePageId)
+            .Select(sp => new { sp.TrackId, sp.ReleaseId })
+            .FirstOrDefaultAsync(cancellationToken);
+        return page is null ? null : (page.TrackId, page.ReleaseId);
+    }
+
+    private Task<bool> IsProviderLinkTakenAsync(Guid platformId, string externalId, CancellationToken cancellationToken) =>
+        dbContext.ProviderLinks.AnyAsync(pl => pl.PlatformId == platformId && pl.ExternalId == externalId, cancellationToken);
+
+    private async Task<Guid?> FindTrackIdByIsrcAsync(string? isrc, CancellationToken cancellationToken) =>
+        isrc is null
+            ? null
+            : await dbContext.Tracks.Where(t => t.Isrc == isrc).Select(t => (Guid?)t.Id).FirstOrDefaultAsync(cancellationToken);
+
+    private async Task<Guid?> FindReleaseIdByUpcAsync(IReadOnlyList<string> upcVariants, CancellationToken cancellationToken)
+    {
+        if (upcVariants.Count == 0)
+        {
+            return null;
+        }
+
+        var codes = upcVariants.ToArray();
+        return await dbContext.Releases.Where(r => r.Upc != null && codes.Contains(r.Upc)).Select(r => (Guid?)r.Id).FirstOrDefaultAsync(cancellationToken);
+    }
+
+    private async Task<SharePage> FindOrCreateSharePageAsync(StreamingResultType type, EntityResolution resolution, CancellationToken cancellationToken)
+    {
+        Guid? trackId = type == StreamingResultType.Track ? resolution.EntityId : null;
+        Guid? releaseId = type == StreamingResultType.Release ? resolution.EntityId : null;
+
+        // Oldest first, client-side: SQLite's EF Core provider can't order by DateTimeOffset. An item
+        // can have several pages from before one page per item was the rule.
+        var pages = await dbContext.SharePages.Include(sp => sp.Links)
+            .Where(sp => sp.TrackId == trackId && sp.ReleaseId == releaseId)
+            .ToListAsync(cancellationToken);
+        var sharePage = pages.OrderBy(sp => sp.CreatedAtUtc).FirstOrDefault();
+
+        if (sharePage is null)
+        {
+            sharePage = new SharePage { TrackId = trackId, ReleaseId = releaseId };
+            dbContext.SharePages.Add(sharePage);
+        }
+
+        var linkedIds = sharePage.Links.Select(l => l.ProviderLinkId).ToHashSet();
+        var order = sharePage.Links.Count == 0 ? 0 : sharePage.Links.Max(l => l.DisplayOrder) + 1;
+        foreach (var providerLink in resolution.ProviderLinks.Where(pl => !linkedIds.Contains(pl.Id)))
+        {
+            dbContext.SharePageLinks.Add(new SharePageLink { SharePage = sharePage, ProviderLink = providerLink, DisplayOrder = order++ });
+        }
+
+        return sharePage;
+    }
+
     private async Task<EntityResolution> ResolveTrackAsync(
         StreamingSearchResult result,
         Guid? existingTrackId,
@@ -127,22 +346,27 @@ public sealed class EfCatalogRepository(ApplicationDbContext dbContext) : ICatal
     {
         if (existingTrackId is { } trackId)
         {
-            var title = await dbContext.Tracks.Where(t => t.Id == trackId).Select(t => t.Title).FirstAsync(cancellationToken);
+            var track = await dbContext.Tracks.FirstAsync(t => t.Id == trackId, cancellationToken);
+            if (track.Isrc is null && result.Isrc is not null && !await dbContext.Tracks.AnyAsync(t => t.Isrc == result.Isrc, cancellationToken))
+            {
+                track.Isrc = result.Isrc;
+            }
+
             var existingProviderLinks = await FetchProviderLinksAsync(trackId: trackId, cancellationToken: cancellationToken);
             var artistName = await GetMainArtistNameAsync(trackId: trackId, cancellationToken: cancellationToken);
 
-            var newLinks = CreateMissingProviderLinks(result.Links, platformsByCode, existingLinksByKey, trackId: trackId);
+            var newLinks = CreateMissingProviderLinks(result.Links, platformsByCode, existingLinksByKey, existingProviderLinks, trackId: trackId);
             dbContext.ProviderLinks.AddRange(newLinks);
 
-            return new EntityResolution(trackId, title, artistName, [.. existingProviderLinks, .. newLinks]);
+            return new EntityResolution(trackId, track.Title, artistName, [.. existingProviderLinks, .. newLinks]);
         }
 
         var artist = new Artist { Name = result.ArtistName };
-        var track = new Track { Title = result.Name, Isrc = result.Isrc };
-        dbContext.AddRange(artist, track, new ArtistCredit { Artist = artist, Track = track, Role = CreditRole.MainArtist });
-        var links = CreateMissingProviderLinks(result.Links, platformsByCode, existingLinksByKey, track: track);
+        var newTrack = new Track { Title = result.Name, Isrc = result.Isrc };
+        dbContext.AddRange(artist, newTrack, new ArtistCredit { Artist = artist, Track = newTrack, Role = CreditRole.MainArtist });
+        var links = CreateMissingProviderLinks(result.Links, platformsByCode, existingLinksByKey, [], track: newTrack);
         dbContext.ProviderLinks.AddRange(links);
-        return new EntityResolution(track.Id, track.Title, artist.Name, links);
+        return new EntityResolution(newTrack.Id, newTrack.Title, artist.Name, links);
     }
 
     private async Task<EntityResolution> ResolveReleaseAsync(
@@ -154,24 +378,33 @@ public sealed class EfCatalogRepository(ApplicationDbContext dbContext) : ICatal
     {
         if (existingReleaseId is { } releaseId)
         {
-            var title = await dbContext.Releases.Where(r => r.Id == releaseId).Select(r => r.Title).FirstAsync(cancellationToken);
+            var release = await dbContext.Releases.FirstAsync(r => r.Id == releaseId, cancellationToken);
+            if (release.Upc is null && result.Upc is not null)
+            {
+                var codes = CatalogKeys.BarcodeVariants(result.Upc).ToArray();
+                if (!await dbContext.Releases.AnyAsync(r => r.Upc != null && codes.Contains(r.Upc), cancellationToken))
+                {
+                    release.Upc = result.Upc;
+                }
+            }
+
             var existingProviderLinks = await FetchProviderLinksAsync(releaseId: releaseId, cancellationToken: cancellationToken);
             var artistName = await GetMainArtistNameAsync(releaseId: releaseId, cancellationToken: cancellationToken);
 
-            var newLinks = CreateMissingProviderLinks(result.Links, platformsByCode, existingLinksByKey, releaseId: releaseId);
+            var newLinks = CreateMissingProviderLinks(result.Links, platformsByCode, existingLinksByKey, existingProviderLinks, releaseId: releaseId);
             dbContext.ProviderLinks.AddRange(newLinks);
 
-            return new EntityResolution(releaseId, title, artistName, [.. existingProviderLinks, .. newLinks]);
+            return new EntityResolution(releaseId, release.Title, artistName, [.. existingProviderLinks, .. newLinks]);
         }
 
         var artist = new Artist { Name = result.ArtistName };
         // Least-wrong default for a provider that carries no release-type signal (e.g. a YouTube
         // playlist). Spotify's album_type maps onto ReleaseType directly — see SpotifyStreamingProvider.
-        var release = new Release { Title = result.Name, Type = result.ReleaseType ?? ReleaseType.Album, Upc = result.Upc };
-        dbContext.AddRange(artist, release, new ArtistCredit { Artist = artist, Release = release, Role = CreditRole.MainArtist });
-        var links = CreateMissingProviderLinks(result.Links, platformsByCode, existingLinksByKey, release: release);
+        var newRelease = new Release { Title = result.Name, Type = result.ReleaseType ?? ReleaseType.Album, Upc = result.Upc };
+        dbContext.AddRange(artist, newRelease, new ArtistCredit { Artist = artist, Release = newRelease, Role = CreditRole.MainArtist });
+        var links = CreateMissingProviderLinks(result.Links, platformsByCode, existingLinksByKey, [], release: newRelease);
         dbContext.ProviderLinks.AddRange(links);
-        return new EntityResolution(release.Id, release.Title, artist.Name, links);
+        return new EntityResolution(newRelease.Id, newRelease.Title, artist.Name, links);
     }
 
     private async Task<List<ProviderLink>> FetchProviderLinksAsync(Guid? trackId = null, Guid? releaseId = null, CancellationToken cancellationToken = default)
@@ -188,20 +421,24 @@ public sealed class EfCatalogRepository(ApplicationDbContext dbContext) : ICatal
         (await dbContext.ArtistCredits.Include(ac => ac.Artist)
             .FirstAsync(ac => ac.Role == CreditRole.MainArtist && ac.TrackId == trackId && ac.ReleaseId == releaseId, cancellationToken)).Artist.Name;
 
+    // A platform holds one link per entity (unique index), so a candidate for a platform the entity
+    // already has is skipped, as is one whose platform item another entity already owns.
     private static List<ProviderLink> CreateMissingProviderLinks(
         IReadOnlyList<ProviderLinkCandidate> links,
         IReadOnlyDictionary<string, Platform> platformsByCode,
         IReadOnlyDictionary<(Guid PlatformId, string ExternalId), ProviderLink> existingLinksByKey,
+        IReadOnlyCollection<ProviderLink> entityLinks,
         Guid? trackId = null,
         Guid? releaseId = null,
         Track? track = null,
         Release? release = null)
     {
+        var occupiedPlatformIds = entityLinks.Select(link => link.PlatformId).ToHashSet();
         var newLinks = new List<ProviderLink>();
         foreach (var link in links)
         {
             var platform = GetPlatform(platformsByCode, link.PlatformCode);
-            if (existingLinksByKey.ContainsKey((platform.Id, link.ExternalId)))
+            if (existingLinksByKey.ContainsKey((platform.Id, link.ExternalId)) || !occupiedPlatformIds.Add(platform.Id))
             {
                 continue;
             }

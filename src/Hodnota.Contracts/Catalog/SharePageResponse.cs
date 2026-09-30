@@ -12,11 +12,25 @@ public enum PlatformType
     Database,
 }
 
+[JsonConverter(typeof(StrictStringEnumConverter<PlatformRowState>))]
+public enum PlatformRowState
+{
+    Checking,
+    Found,
+    OtherVersion,
+    NotFound,
+    Failed,
+}
+
 public sealed record SharePageLinkResponse(string Platform, Uri Url, PlatformType Type);
+
+public sealed record PlatformRowResponse(string Platform, PlatformType Type, PlatformRowState State, Uri? Url);
 
 public sealed record SharePageResponse(
     Guid Id,
     CandidateType Type,
     string Name,
     string Artist,
-    IReadOnlyList<SharePageLinkResponse> Links);
+    IReadOnlyList<SharePageLinkResponse> Links,
+    IReadOnlyList<PlatformRowResponse> Platforms,
+    bool IsComplete);

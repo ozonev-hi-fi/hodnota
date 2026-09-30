@@ -4,6 +4,7 @@ using Hodnota.Api.Catalog;
 using Hodnota.Application.Catalog;
 using Hodnota.Contracts.Catalog;
 
+using ContractRowState = Hodnota.Contracts.Catalog.PlatformRowState;
 using DomainPlatformType = Hodnota.Domain.Catalog.PlatformType;
 
 namespace Hodnota.Api.Tests.Catalog;
@@ -24,10 +25,40 @@ public class CatalogMappingExtensionsTests
             "Metallica",
             [new SharePageLinkResult("youtube", new Uri("https://example.com"), platformType)]);
 
-        var response = result.ToResponse();
+        var response = new SharePageView(result, [], IsComplete: true).ToResponse();
 
         response.Links.Single().Type.ToString().Should().Be(platformType.ToString(),
             $"{nameof(DomainPlatformType)}.{platformType} must have a matching {nameof(PlatformType)} case in {nameof(CatalogMappingExtensions)}");
+    }
+
+    public static IEnumerable<object[]> AllRowStates() =>
+        Enum.GetValues<Application.Catalog.PlatformRowState>().Select(value => new object[] { value });
+
+    [Theory]
+    [MemberData(nameof(AllRowStates))]
+    public void ToResponse_Row_MapsEveryRowStateToAContractRowState(Application.Catalog.PlatformRowState state)
+    {
+        var row = new PlatformRow("tidal", DomainPlatformType.StreamingService, state, new Uri("https://tidal.com/browse/track/1"));
+
+        var response = row.ToResponse();
+
+        response.State.ToString().Should().Be(state.ToString());
+        response.Platform.Should().Be("tidal");
+        response.Type.Should().Be(PlatformType.StreamingService);
+        response.Url.Should().Be(new Uri("https://tidal.com/browse/track/1"));
+    }
+
+    [Fact]
+    public void ToResponse_View_CarriesTheRowsAndTheCompleteFlag()
+    {
+        var page = new SharePageResult(Guid.NewGuid(), StreamingResultType.Release, "OK Computer", "Radiohead", []);
+        var view = new SharePageView(page, [new PlatformRow("discogs", DomainPlatformType.Database, Application.Catalog.PlatformRowState.Checking, null)], IsComplete: false);
+
+        var response = view.ToResponse();
+
+        response.Type.Should().Be(CandidateType.Album);
+        response.IsComplete.Should().BeFalse();
+        response.Platforms.Should().ContainSingle().Which.State.Should().Be(ContractRowState.Checking);
     }
 
     [Fact]

@@ -18,7 +18,10 @@ vi.mock('./api/catalog.ts', () => ({
     name: 'Test Song',
     artist: 'Test Artist',
     links: [],
+    platforms: [],
+    isComplete: true,
   }),
+  watchSharePage: vi.fn(),
 }));
 vi.mock('./api/identity.ts', () => ({
   register: vi.fn(),
