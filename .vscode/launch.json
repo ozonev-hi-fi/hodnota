@@ -1,0 +1,41 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "API (debug)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "hodnota: prepare API",
+      "program": "${workspaceFolder}/src/Hodnota.Api/bin/Debug/net10.0/Hodnota.Api.dll",
+      "cwd": "${workspaceFolder}/src/Hodnota.Api",
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "http://localhost:5009"
+      },
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "UI (Vite + Chrome)",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--strictPort"],
+      "console": "integratedTerminal",
+      "serverReadyAction": {
+        "action": "debugWithChrome",
+        "pattern": "ready in",
+        "uriFormat": "http://localhost:5173",
+        "webRoot": "${workspaceFolder}/web",
+        "killOnServerStop": true
+      }
+    }
+  ],
+  "compounds": [
+    {
+      "name": "hodnota: full stack (debug)",
+      "configurations": ["API (debug)", "UI (Vite + Chrome)"],
+      "stopAll": true
+    }
+  ]
+}

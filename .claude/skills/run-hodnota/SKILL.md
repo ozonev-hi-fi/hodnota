@@ -133,6 +133,8 @@ dotnet run --project src/Hodnota.Api   # http://localhost:5009, ASPNETCORE_ENVIR
 cd web && npm run dev   # http://localhost:5173, Ctrl-C to stop
 ```
 
+In VS Code, the compound launch config **hodnota: full stack (debug)** (`.vscode/launch.json`) does all of this in one F5, with debuggers attached (see README.md). It targets the developer's own `hodnota` database, so it is for humans only — agents keep using `run-agent-api.sh`.
+
 ## Test
 
 ```bash

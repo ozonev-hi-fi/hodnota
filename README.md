@@ -60,6 +60,16 @@ npm run build    # production build
 npm run check    # lint/format check (same check CI runs)
 ```
 
+## Run & debug in VS Code
+
+For manual testing, [`.vscode/launch.json`](.vscode/launch.json) and [`.vscode/tasks.json`](.vscode/tasks.json) start everything in one action. They use PowerShell 7 (`pwsh`), so it must be on your `PATH`.
+
+- **Start:** open *Run and Debug*, pick **hodnota: full stack (debug)**, press F5. It starts the Postgres container, then the API (.NET debugger, http://localhost:5009), then Vite (http://localhost:5173) and opens Chrome with the VS Code JS debugger attached. Breakpoints work in both `.cs` and `.tsx` files.
+- **Stop:** Shift+F5 stops the API, Vite and the Chrome session. Postgres keeps running.
+- **Tasks** (*Terminal > Run Task*): `hodnota: stop containers` (`docker compose stop`, keeps your data) and `hodnota: force stop (ports 5009, 5173)` (use it if a process stays alive after Shift+F5).
+
+This runs against your own `hodnota` database, so data you create stays. Run `npm install` in `/web` once before the first start.
+
 ## CI
 
 Two independent workflows, each running only when a PR touches the paths it cares about: [`.github/workflows/ci-backend.yml`](.github/workflows/ci-backend.yml) (the backend checks above) and [`.github/workflows/ci-web.yml`](.github/workflows/ci-web.yml) (the web checks above). See [decisions/0004](docs/decisions/0004-scaffold-backend-and-web-app.md) for the reasoning.
