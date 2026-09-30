@@ -1,0 +1,42 @@
+{
+  "version": "2.0.0",
+  "options": {
+    "shell": {
+      "executable": "pwsh",
+      "args": ["-NoProfile", "-Command"]
+    }
+  },
+  "tasks": [
+    {
+      "label": "hodnota: start containers",
+      "type": "shell",
+      "command": "docker compose up -d --wait",
+      "problemMatcher": []
+    },
+    {
+      "label": "hodnota: build API",
+      "type": "shell",
+      "command": "dotnet build src/Hodnota.Api /property:GenerateFullPaths=true /consoleloggerparameters:NoSummary",
+      "group": "build",
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "hodnota: prepare API",
+      "dependsOn": ["hodnota: start containers", "hodnota: build API"],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
+    },
+    {
+      "label": "hodnota: stop containers",
+      "type": "shell",
+      "command": "docker compose stop",
+      "problemMatcher": []
+    },
+    {
+      "label": "hodnota: force stop (ports 5009, 5173)",
+      "type": "shell",
+      "command": "$ids = Get-NetTCPConnection -LocalPort 5009, 5173 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess | Sort-Object -Unique; if ($ids) { foreach ($id in $ids) { Stop-Process -Id $id -Force; Write-Host ('Stopped PID ' + $id) } } else { Write-Host 'Nothing is listening on 5009 or 5173.' }",
+      "problemMatcher": []
+    }
+  ]
+}
