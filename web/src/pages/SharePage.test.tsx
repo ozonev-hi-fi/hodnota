@@ -120,6 +120,52 @@ describe('SharePage', () => {
     expect(screen.queryByText(/Data provided by/)).not.toBeInTheDocument();
   });
 
+  it('credits TIDAL and links back to the specific page when a Tidal link is present', async () => {
+    vi.mocked(getSharePage).mockResolvedValue({
+      id: 'share-1',
+      type: 'Album',
+      name: 'Nothing Else Matters',
+      artist: 'Metallica',
+      links: [
+        {
+          platform: 'tidal',
+          url: 'https://tidal.com/browse/album/1',
+          type: 'StreamingService',
+        },
+      ],
+    });
+
+    renderAt('share-1');
+    await screen.findByText('Nothing Else Matters');
+
+    const credit = screen.getByText(/Content provided by/);
+    expect(within(credit).getByRole('link', { name: 'TIDAL' })).toHaveAttribute(
+      'href',
+      'https://tidal.com/browse/album/1',
+    );
+  });
+
+  it('does not show a TIDAL credit when there is no Tidal link', async () => {
+    vi.mocked(getSharePage).mockResolvedValue({
+      id: 'share-1',
+      type: 'Song',
+      name: 'Nothing Else Matters',
+      artist: 'Metallica',
+      links: [
+        {
+          platform: 'youtube',
+          url: 'https://www.youtube.com/watch?v=1',
+          type: 'StreamingService',
+        },
+      ],
+    });
+
+    renderAt('share-1');
+    await screen.findByText('Nothing Else Matters');
+
+    expect(screen.queryByText(/Content provided by/)).not.toBeInTheDocument();
+  });
+
   it('shows an error message when loading fails', async () => {
     vi.mocked(getSharePage).mockRejectedValue(
       new ApiError('Could not load the share page.', 404),

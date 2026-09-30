@@ -4,6 +4,7 @@ using Hodnota.Api.OpenApi;
 using Hodnota.Infrastructure;
 using Hodnota.Infrastructure.Identity;
 using Hodnota.Infrastructure.Providers.Discogs;
+using Hodnota.Infrastructure.Providers.Tidal;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -32,9 +33,10 @@ await using (var scope = app.Services.CreateAsyncScope())
         await dbContext.Database.EnsureCreatedAsync();
     }
 
-    // Forces the YouTubeService and DiscogsCredentials singleton factories to run now. Failing fast on a missing/invalid YouTube:ApiKey or Discogs:Token at startup.
+    // Forces the YouTubeService, DiscogsCredentials and TidalCredentials singleton factories to run now. Failing fast on a missing/invalid YouTube:ApiKey, Discogs:Token or Tidal:ClientId/ClientSecret at startup.
     _ = scope.ServiceProvider.GetRequiredService<YouTubeService>();
     _ = scope.ServiceProvider.GetRequiredService<DiscogsCredentials>();
+    _ = scope.ServiceProvider.GetRequiredService<TidalCredentials>();
 }
 
 app.UseAuthentication();

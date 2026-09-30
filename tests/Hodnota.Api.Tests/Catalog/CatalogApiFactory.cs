@@ -3,6 +3,7 @@ using Hodnota.Application.Catalog;
 using Hodnota.Infrastructure;
 using Hodnota.Infrastructure.Identity;
 using Hodnota.Infrastructure.Providers.Discogs;
+using Hodnota.Infrastructure.Providers.Tidal;
 using Hodnota.Infrastructure.Providers.YouTube;
 
 using Microsoft.AspNetCore.Hosting;
@@ -16,10 +17,11 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace Hodnota.Api.Tests.Catalog;
 
 // Runs the real API host against an in-memory (shared-cache, so it survives across requests) SQLite
-// database, with the real YouTube, Spotify, Qobuz, and Discogs providers swapped for stubs — no
+// database, with the real YouTube, Spotify, Qobuz, Discogs, and Tidal providers swapped for stubs — no
 // real API keys, no network calls. Program.cs still resolves a real YouTubeService singleton
-// eagerly at startup though, and checks Discogs:Token there too, so placeholder YouTube and Discogs
-// config values are required for the app to boot at all. Spotify's and Qobuz's own config is left
+// eagerly at startup though, and checks Discogs:Token and Tidal:ClientId/ClientSecret there too, so
+// placeholder YouTube, Discogs, and Tidal config values are required for the app to boot at all.
+// Spotify's and Qobuz's own config is left
 // unset — both are optional (see ADR 0011's addendum), so neither real provider is ever registered
 // here; RemoveAll<IStreamingProvider>() + the stub re-add below don't depend on either being.
 public sealed class CatalogApiFactory : WebApplicationFactory<Program>
@@ -39,6 +41,8 @@ public sealed class CatalogApiFactory : WebApplicationFactory<Program>
 
     public StubStreamingProvider SpotifyProvider { get; } = new(ProviderCodes.Spotify);
 
+    public StubStreamingProvider TidalProvider { get; } = new(ProviderCodes.Tidal);
+
     public StubStreamingProvider YouTubeProvider { get; } = new(ProviderCodes.YouTube);
 
     public CapturingEmailSender EmailSender { get; } = new();
@@ -57,16 +61,19 @@ public sealed class CatalogApiFactory : WebApplicationFactory<Program>
             new KeyValuePair<string, string?>($"ConnectionStrings:{DatabaseConfiguration.ConnectionStringName}", _connectionString),
             new KeyValuePair<string, string?>(YouTubeConfiguration.ApiKeyConfigKey, "test-key"),
             new KeyValuePair<string, string?>(DiscogsConfiguration.TokenConfigKey, "test-token"),
+            new KeyValuePair<string, string?>(TidalConfiguration.ClientIdConfigKey, "test-client-id"),
+            new KeyValuePair<string, string?>(TidalConfiguration.ClientSecretConfigKey, "test-client-secret"),
         ]));
 
         builder.ConfigureServices(services =>
         {
             services.RemoveAll<IStreamingProvider>();
             // Registered in reverse trust order deliberately, so endpoint tests that depend on
-            // Discogs-before-Qobuz-before-Spotify-before-YouTube ordering prove
+            // Discogs-before-Qobuz-before-Tidal-before-Spotify-before-YouTube ordering prove
             // ProviderTrustOrder.Sort is doing the sorting, not an accident of registration order.
             services.AddSingleton<IStreamingProvider>(YouTubeProvider);
             services.AddSingleton<IStreamingProvider>(SpotifyProvider);
+            services.AddSingleton<IStreamingProvider>(TidalProvider);
             services.AddSingleton<IStreamingProvider>(QobuzProvider);
             services.AddSingleton<IStreamingProvider>(DiscogsProvider);
             services.RemoveAll<IEmailSender<ApplicationUser>>();

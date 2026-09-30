@@ -1,6 +1,7 @@
 using Hodnota.Infrastructure;
 using Hodnota.Infrastructure.Identity;
 using Hodnota.Infrastructure.Providers.Discogs;
+using Hodnota.Infrastructure.Providers.Tidal;
 using Hodnota.Infrastructure.Providers.YouTube;
 
 using Microsoft.AspNetCore.Hosting;
@@ -42,11 +43,14 @@ public sealed class AuthApiFactory : WebApplicationFactory<Program>
             new KeyValuePair<string, string?>($"ConnectionStrings:{DatabaseConfiguration.ConnectionStringName}", _connectionString),
             // Program.cs resolves YouTubeService eagerly at startup — a placeholder value is enough,
             // since this factory never calls its real methods, only constructs it. Program.cs checks
-            // Discogs:Token at startup too, so it needs the same placeholder. Spotify's own config is
+            // Discogs:Token and Tidal:ClientId/ClientSecret at startup too, so they need the same
+            // placeholders. Spotify's own config is
             // intentionally left unset: it's optional (see ADR 0011's addendum), so leaving it unset
             // here doubles as proof the app still boots without it.
             new KeyValuePair<string, string?>(YouTubeConfiguration.ApiKeyConfigKey, "test-key"),
             new KeyValuePair<string, string?>(DiscogsConfiguration.TokenConfigKey, "test-token"),
+            new KeyValuePair<string, string?>(TidalConfiguration.ClientIdConfigKey, "test-client-id"),
+            new KeyValuePair<string, string?>(TidalConfiguration.ClientSecretConfigKey, "test-client-secret"),
         ]));
 
         builder.ConfigureServices(services =>

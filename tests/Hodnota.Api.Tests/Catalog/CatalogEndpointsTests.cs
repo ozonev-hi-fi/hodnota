@@ -162,6 +162,7 @@ public class CatalogEndpointsTests(CatalogApiFactory factory) : IClassFixture<Ca
     {
         factory.DiscogsProvider.ThrowProviderException = true;
         factory.QobuzProvider.ThrowProviderException = true;
+        factory.TidalProvider.ThrowProviderException = true;
         factory.SpotifyProvider.ThrowProviderException = true;
         factory.YouTubeProvider.ThrowProviderException = true;
         try
@@ -174,6 +175,7 @@ public class CatalogEndpointsTests(CatalogApiFactory factory) : IClassFixture<Ca
         {
             factory.DiscogsProvider.ThrowProviderException = false;
             factory.QobuzProvider.ThrowProviderException = false;
+            factory.TidalProvider.ThrowProviderException = false;
             factory.SpotifyProvider.ThrowProviderException = false;
             factory.YouTubeProvider.ThrowProviderException = false;
         }
