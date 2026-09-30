@@ -127,7 +127,9 @@ public sealed class TidalStreamingProvider(TidalApiClient apiClient) : IStreamin
     {
         foreach (var link in externalLinks ?? [])
         {
-            if (link.Meta?.Type == SharingLinkType && Uri.TryCreate(link.Href, UriKind.Absolute, out var url))
+            if (link.Meta?.Type == SharingLinkType
+                && Uri.TryCreate(link.Href, UriKind.Absolute, out var url)
+                && (url.Scheme == Uri.UriSchemeHttp || url.Scheme == Uri.UriSchemeHttps))
             {
                 return url;
             }
