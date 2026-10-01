@@ -25,6 +25,8 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
 
     public DbSet<ProviderLink> ProviderLinks => Set<ProviderLink>();
 
+    public DbSet<ProviderCheck> ProviderChecks => Set<ProviderCheck>();
+
     public DbSet<Genre> Genres => Set<Genre>();
 
     public DbSet<EntityGenre> EntityGenres => Set<EntityGenre>();

@@ -17,7 +17,62 @@ public sealed partial class DiscogsStreamingProvider(DiscogsApiClient apiClient)
 
     public string ProviderCode => ProviderCodes.Discogs;
 
+    public IReadOnlyList<string> LinkPlatformCodes { get; } = [PlatformCodes.Discogs];
+
     public bool Supports(StreamingResultType type) => type == StreamingResultType.Release;
+
+    public bool SupportsLookup(StreamingResultType type) => type == StreamingResultType.Release;
+
+    public async Task<IReadOnlyList<StreamingSearchResult>> LookupAsync(StreamingLookupKey key, CancellationToken cancellationToken)
+    {
+        if (key.Type != StreamingResultType.Release)
+        {
+            return [];
+        }
+
+        var response = await apiClient.LookupByBarcodeAsync(key.Codes[0], cancellationToken);
+
+        var matches = (response.Results ?? [])
+            .Where(result => result.Id.HasValue && !string.IsNullOrWhiteSpace(result.Title) && result.Type == ReleaseResultType)
+            .Where(result => HasBarcode(result, key))
+            .OrderBy(result => HasMaster(result) ? 0 : 1)
+            .Take(MaxResults);
+
+        return [.. matches.SelectMany(ToLookupResults)];
+    }
+
+    // Barcodes are typed in as printed, with spaces and dashes, next to non-barcode text.
+    internal static bool HasBarcode(DiscogsSearchResult result, StreamingLookupKey key) =>
+        (result.Barcode ?? []).Any(barcode => CatalogKeys.BarcodeVariants(barcode).Any(key.Codes.Contains));
+
+    internal static bool HasMaster(DiscogsSearchResult result) => result.MasterId is > 0;
+
+    // A master link first (it stands for every pressing of the album), then the release's own link
+    // right after it: a caller takes the first candidate not already linked to another catalog entity,
+    // so the release serves as the fallback when the master is taken.
+    internal static IEnumerable<StreamingSearchResult> ToLookupResults(DiscogsSearchResult result)
+    {
+        if (HasMaster(result))
+        {
+            yield return ToMasterResult(result);
+        }
+
+        yield return ToSearchResult(result);
+    }
+
+    internal static StreamingSearchResult ToMasterResult(DiscogsSearchResult result)
+    {
+        var masterId = result.MasterId!.Value;
+        var (artistName, name) = SplitTitle(result.Title!);
+
+        return new StreamingSearchResult(
+            StreamingResultType.Release,
+            name,
+            artistName,
+            PickImage(result.CoverImage),
+            [new ProviderLinkCandidate(PlatformCodes.Discogs, $"{MasterResultType}:{masterId}", new Uri($"https://www.discogs.com/{MasterResultType}/{masterId}"))],
+            ReleaseType.Album);
+    }
 
     public async Task<IReadOnlyList<StreamingSearchResult>> SearchAsync(string query, StreamingResultType type, CancellationToken cancellationToken)
     {

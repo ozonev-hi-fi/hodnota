@@ -32,14 +32,14 @@ public class EfCatalogRepositoryTests
         ]);
 
     [Fact]
-    public async Task CreateSharePageAsync_NewTrack_CreatesArtistTrackAndBothProviderLinks()
+    public async Task ResolveSharePageAsync_NewTrack_CreatesArtistTrackAndBothProviderLinks()
     {
         var (connection, context) = await CreateContextAsync();
         await using var _ = connection;
         await using var __ = context;
         var repository = new EfCatalogRepository(context);
 
-        var result = await repository.CreateSharePageAsync(NewTrackResult(), CancellationToken.None);
+        var result = await repository.ResolveSharePageAsync(NewTrackResult(), CancellationToken.None);
 
         result.Name.Should().Be("Nothing Else Matters");
         result.ArtistName.Should().Be("Metallica");
@@ -54,40 +54,95 @@ public class EfCatalogRepositoryTests
     }
 
     [Fact]
-    public async Task CreateSharePageAsync_SameVideoIdResolvedTwice_ReusesTrackButCreatesSecondSharePage()
+    public async Task ResolveSharePageAsync_SameVideoIdResolvedTwice_ReusesTrackAndSharePage()
     {
         var (connection, context) = await CreateContextAsync();
         await using var _ = connection;
         await using var __ = context;
         var repository = new EfCatalogRepository(context);
 
-        var first = await repository.CreateSharePageAsync(NewTrackResult(), CancellationToken.None);
-        var second = await repository.CreateSharePageAsync(NewTrackResult(), CancellationToken.None);
+        var first = await repository.ResolveSharePageAsync(NewTrackResult(), CancellationToken.None);
+        var second = await repository.ResolveSharePageAsync(NewTrackResult(), CancellationToken.None);
 
-        second.Id.Should().NotBe(first.Id);
+        second.Id.Should().Be(first.Id);
+        second.Links.Should().HaveCount(2);
         (await context.Tracks.CountAsync()).Should().Be(1);
         (await context.Artists.CountAsync()).Should().Be(1);
         (await context.ProviderLinks.CountAsync()).Should().Be(2);
-        (await context.SharePages.CountAsync()).Should().Be(2);
+        (await context.SharePages.CountAsync()).Should().Be(1);
+        (await context.SharePageLinks.CountAsync()).Should().Be(2);
     }
 
     [Fact]
-    public async Task CreateSharePageAsync_DifferentVideoId_CreatesSeparateTrack()
+    public async Task ResolveSharePageAsync_ItemWithSeveralOlderSharePages_ReturnsTheOldestOne()
+    {
+        var (connection, context) = await CreateContextAsync();
+        await using var _ = connection;
+        await using var __ = context;
+        var repository = new EfCatalogRepository(context);
+        var first = await repository.ResolveSharePageAsync(NewTrackResult(), CancellationToken.None);
+        var trackId = await context.Tracks.Select(t => t.Id).SingleAsync();
+        // No TimestampsInterceptor in this context, so both dates are set explicitly.
+        (await context.SharePages.SingleAsync()).CreatedAtUtc = new DateTimeOffset(2021, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var older = new SharePage
+        {
+            TrackId = trackId,
+            CreatedAtUtc = new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero),
+            UpdatedAtUtc = new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero),
+        };
+        context.SharePages.Add(older);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var result = await repository.ResolveSharePageAsync(NewTrackResult(), CancellationToken.None);
+
+        result.Id.Should().Be(older.Id);
+        result.Id.Should().NotBe(first.Id);
+        result.Links.Should().HaveCount(2, "links missing from an older page are added to it");
+    }
+
+    [Fact]
+    public async Task ResolveSharePageAsync_EntityAlreadyHasALinkOnThePlatform_KeepsItInsteadOfAddingASecond()
+    {
+        var (connection, context) = await CreateContextAsync();
+        await using var _ = connection;
+        await using var __ = context;
+        var repository = new EfCatalogRepository(context);
+        var first = new StreamingSearchResult(
+            StreamingResultType.Track,
+            "Nothing Else Matters",
+            "Metallica",
+            null,
+            [new ProviderLinkCandidate(PlatformCodes.Spotify, "sp-1", new Uri("https://open.spotify.com/track/sp-1"))],
+            Isrc: "USRC17607839");
+        await repository.ResolveSharePageAsync(first, CancellationToken.None);
+
+        // The same recording (same ISRC), but the provider now returns a different Spotify id.
+        var second = first with { Links = [new ProviderLinkCandidate(PlatformCodes.Spotify, "sp-2", new Uri("https://open.spotify.com/track/sp-2"))] };
+
+        var act = () => repository.ResolveSharePageAsync(second, CancellationToken.None);
+
+        await act.Should().NotThrowAsync();
+        (await context.ProviderLinks.Select(pl => pl.ExternalId).ToListAsync()).Should().Equal("sp-1");
+    }
+
+    [Fact]
+    public async Task ResolveSharePageAsync_DifferentVideoId_CreatesSeparateTrack()
     {
         var (connection, context) = await CreateContextAsync();
         await using var _ = connection;
         await using var __ = context;
         var repository = new EfCatalogRepository(context);
 
-        await repository.CreateSharePageAsync(NewTrackResult("video-1"), CancellationToken.None);
-        await repository.CreateSharePageAsync(NewTrackResult("video-2"), CancellationToken.None);
+        await repository.ResolveSharePageAsync(NewTrackResult("video-1"), CancellationToken.None);
+        await repository.ResolveSharePageAsync(NewTrackResult("video-2"), CancellationToken.None);
 
         (await context.Tracks.CountAsync()).Should().Be(2);
         (await context.Artists.CountAsync()).Should().Be(2);
     }
 
     [Fact]
-    public async Task CreateSharePageAsync_ReusedTrack_ReturnsLinksOrderedByCreationNotInsertionOrder()
+    public async Task ResolveSharePageAsync_ReusedTrack_ReturnsLinksOrderedByCreationNotInsertionOrder()
     {
         var (connection, context) = await CreateContextAsync();
         await using var _ = connection;
@@ -121,13 +176,13 @@ public class EfCatalogRepositoryTests
         await context.SaveChangesAsync();
         var repository = new EfCatalogRepository(context);
 
-        var result = await repository.CreateSharePageAsync(NewTrackResult(), CancellationToken.None);
+        var result = await repository.ResolveSharePageAsync(NewTrackResult(), CancellationToken.None);
 
         result.Links.Select(l => l.PlatformCode).Should().Equal(PlatformCodes.YouTube, PlatformCodes.YouTubeMusic);
     }
 
     [Fact]
-    public async Task CreateSharePageAsync_NewRelease_CreatesReleaseNotTrack()
+    public async Task ResolveSharePageAsync_NewRelease_CreatesReleaseNotTrack()
     {
         var (connection, context) = await CreateContextAsync();
         await using var _ = connection;
@@ -143,7 +198,7 @@ public class EfCatalogRepositoryTests
                 new ProviderLinkCandidate(PlatformCodes.YouTubeMusic, "playlist-1", new Uri("https://music.youtube.com/playlist?list=playlist-1")),
             ]);
 
-        var sharePageResult = await repository.CreateSharePageAsync(result, CancellationToken.None);
+        var sharePageResult = await repository.ResolveSharePageAsync(result, CancellationToken.None);
 
         sharePageResult.Type.Should().Be(StreamingResultType.Release);
         (await context.Releases.CountAsync()).Should().Be(1);
@@ -151,7 +206,7 @@ public class EfCatalogRepositoryTests
     }
 
     [Fact]
-    public async Task CreateSharePageAsync_ExistingEntityAndANewPlatformLink_AddsTheMissingLink()
+    public async Task ResolveSharePageAsync_ExistingEntityAndANewPlatformLink_AddsTheMissingLink()
     {
         var (connection, context) = await CreateContextAsync();
         await using var _ = connection;
@@ -163,7 +218,7 @@ public class EfCatalogRepositoryTests
             "Metallica",
             null,
             [new ProviderLinkCandidate(PlatformCodes.YouTube, "video-1", new Uri("https://www.youtube.com/watch?v=video-1"))]);
-        await repository.CreateSharePageAsync(youTubeOnly, CancellationToken.None);
+        await repository.ResolveSharePageAsync(youTubeOnly, CancellationToken.None);
 
         // Simulates a merged candidate: the same YouTube link this track already has, plus a
         // brand-new Spotify link a later search discovered for the same song. See ADR 0011.
@@ -177,7 +232,7 @@ public class EfCatalogRepositoryTests
                 new ProviderLinkCandidate(PlatformCodes.YouTube, "video-1", new Uri("https://www.youtube.com/watch?v=video-1")),
             ]);
 
-        var result = await repository.CreateSharePageAsync(mergedWithSpotify, CancellationToken.None);
+        var result = await repository.ResolveSharePageAsync(mergedWithSpotify, CancellationToken.None);
 
         result.Links.Select(l => l.PlatformCode).Should().Contain(PlatformCodes.Spotify);
         result.Links.Should().HaveCount(2);
@@ -186,7 +241,7 @@ public class EfCatalogRepositoryTests
     }
 
     [Fact]
-    public async Task CreateSharePageAsync_LinkAlreadyOwnedByADifferentEntity_SkipsItWithoutThrowing()
+    public async Task ResolveSharePageAsync_LinkAlreadyOwnedByADifferentEntity_SkipsItWithoutThrowing()
     {
         var (connection, context) = await CreateContextAsync();
         await using var _ = connection;
@@ -204,8 +259,8 @@ public class EfCatalogRepositoryTests
             "Metallica",
             null,
             [new ProviderLinkCandidate(PlatformCodes.YouTube, "video-1", new Uri("https://www.youtube.com/watch?v=video-1"))]);
-        await repository.CreateSharePageAsync(entityA, CancellationToken.None);
-        await repository.CreateSharePageAsync(entityB, CancellationToken.None);
+        await repository.ResolveSharePageAsync(entityA, CancellationToken.None);
+        await repository.ResolveSharePageAsync(entityB, CancellationToken.None);
 
         // Straddles both pre-existing entities: the Spotify link belongs to entityA, the YouTube
         // link to entityB. Resolves into entityA (the first candidate link that already exists)
@@ -220,7 +275,7 @@ public class EfCatalogRepositoryTests
                 new ProviderLinkCandidate(PlatformCodes.YouTube, "video-1", new Uri("https://www.youtube.com/watch?v=video-1")),
             ]);
 
-        var result = await repository.CreateSharePageAsync(straddling, CancellationToken.None);
+        var result = await repository.ResolveSharePageAsync(straddling, CancellationToken.None);
 
         result.Links.Should().ContainSingle(l => l.PlatformCode == PlatformCodes.Spotify);
         (await context.Tracks.CountAsync()).Should().Be(2);
@@ -228,7 +283,7 @@ public class EfCatalogRepositoryTests
     }
 
     [Fact]
-    public async Task CreateSharePageAsync_NewTrackWithIsrc_PersistsIsrc()
+    public async Task ResolveSharePageAsync_NewTrackWithIsrc_PersistsIsrc()
     {
         var (connection, context) = await CreateContextAsync();
         await using var _ = connection;
@@ -236,13 +291,13 @@ public class EfCatalogRepositoryTests
         var repository = new EfCatalogRepository(context);
         var result = NewTrackResult() with { Isrc = "USRC17607839" };
 
-        await repository.CreateSharePageAsync(result, CancellationToken.None);
+        await repository.ResolveSharePageAsync(result, CancellationToken.None);
 
         (await context.Tracks.Select(t => t.Isrc).SingleAsync()).Should().Be("USRC17607839");
     }
 
     [Fact]
-    public async Task CreateSharePageAsync_NewReleaseWithUpc_PersistsUpc()
+    public async Task ResolveSharePageAsync_NewReleaseWithUpc_PersistsUpc()
     {
         var (connection, context) = await CreateContextAsync();
         await using var _ = connection;
@@ -256,13 +311,13 @@ public class EfCatalogRepositoryTests
             [new ProviderLinkCandidate(PlatformCodes.Qobuz, "album-1", new Uri("https://open.qobuz.com/album/album-1"))],
             Upc: "042284197928");
 
-        await repository.CreateSharePageAsync(result, CancellationToken.None);
+        await repository.ResolveSharePageAsync(result, CancellationToken.None);
 
         (await context.Releases.Select(r => r.Upc).SingleAsync()).Should().Be("042284197928");
     }
 
     [Fact]
-    public async Task CreateSharePageAsync_ConflictingIsrc_CreatesSecondTrackWithoutCrashingOrDuplicatingTheIsrc()
+    public async Task ResolveSharePageAsync_SameIsrcFromAnUnlinkedProvider_ReusesTheTrackAndItsSharePage()
     {
         var (connection, context) = await CreateContextAsync();
         await using var _ = connection;
@@ -275,29 +330,41 @@ public class EfCatalogRepositoryTests
             null,
             [new ProviderLinkCandidate(PlatformCodes.Qobuz, "1", new Uri("https://open.qobuz.com/track/1"))],
             Isrc: "USRC17607839");
-        await repository.CreateSharePageAsync(first, CancellationToken.None);
+        var firstPage = await repository.ResolveSharePageAsync(first, CancellationToken.None);
 
-        // A different, unlinked provider result for what happens to be the same real-world
-        // recording (same Isrc) but no shared ProviderLinkCandidate, so it resolves as a new track
-        // rather than being recognized as the existing one — resolve-time dedup by natural key is
-        // deferred (see ADR 0011).
+        // No shared ProviderLinkCandidate with the first result, only the same ISRC.
         var second = new StreamingSearchResult(
             StreamingResultType.Track,
             "Nothing Else Matters",
             "Metallica",
             null,
             [new ProviderLinkCandidate(PlatformCodes.Spotify, "sp-1", new Uri("https://open.spotify.com/track/sp-1"))],
-            Isrc: "USRC17607839");
+            Isrc: "usrc-17-607839");
 
-        var act = () => repository.CreateSharePageAsync(second, CancellationToken.None);
+        var secondPage = await repository.ResolveSharePageAsync(second, CancellationToken.None);
 
-        await act.Should().NotThrowAsync();
-        (await context.Tracks.CountAsync()).Should().Be(2);
-        (await context.Tracks.Select(t => t.Isrc).ToListAsync()).Should().BeEquivalentTo(["USRC17607839", null]);
+        secondPage.Id.Should().Be(firstPage.Id);
+        secondPage.Links.Select(l => l.PlatformCode).Should().BeEquivalentTo([PlatformCodes.Qobuz, PlatformCodes.Spotify]);
+        (await context.Tracks.CountAsync()).Should().Be(1);
+        (await context.Tracks.Select(t => t.Isrc).SingleAsync()).Should().Be("USRC17607839");
     }
 
     [Fact]
-    public async Task CreateSharePageAsync_ConflictingUpc_CreatesSecondReleaseWithoutCrashingOrDuplicatingTheUpc()
+    public async Task ResolveSharePageAsync_ExistingTrackWithoutIsrc_GetsTheIsrcOfALaterResolve()
+    {
+        var (connection, context) = await CreateContextAsync();
+        await using var _ = connection;
+        await using var __ = context;
+        var repository = new EfCatalogRepository(context);
+        await repository.ResolveSharePageAsync(NewTrackResult(), CancellationToken.None);
+
+        await repository.ResolveSharePageAsync(NewTrackResult() with { Isrc = "USRC17607839" }, CancellationToken.None);
+
+        (await context.Tracks.Select(t => t.Isrc).SingleAsync()).Should().Be("USRC17607839");
+    }
+
+    [Fact]
+    public async Task ResolveSharePageAsync_SameUpcInAnotherFormFromAnUnlinkedProvider_ReusesTheRelease()
     {
         var (connection, context) = await CreateContextAsync();
         await using var _ = connection;
@@ -310,25 +377,22 @@ public class EfCatalogRepositoryTests
             null,
             [new ProviderLinkCandidate(PlatformCodes.Qobuz, "album-1", new Uri("https://open.qobuz.com/album/album-1"))],
             Upc: "042284197928");
-        await repository.CreateSharePageAsync(first, CancellationToken.None);
+        var firstPage = await repository.ResolveSharePageAsync(first, CancellationToken.None);
 
-        // A different, unlinked provider result for what happens to be the same real-world release
-        // (same Upc) but no shared ProviderLinkCandidate, so it resolves as a new release rather than
-        // being recognized as the existing one — resolve-time dedup by natural key is deferred (see
-        // ADR 0011).
+        // No shared ProviderLinkCandidate with the first result, only the same UPC written as EAN-13.
         var second = new StreamingSearchResult(
             StreamingResultType.Release,
             "Nothing",
             "N.E.R.D.",
             null,
             [new ProviderLinkCandidate(PlatformCodes.Spotify, "sp-album-1", new Uri("https://open.spotify.com/album/sp-album-1"))],
-            Upc: "042284197928");
+            Upc: "0042284197928");
 
-        var act = () => repository.CreateSharePageAsync(second, CancellationToken.None);
+        var secondPage = await repository.ResolveSharePageAsync(second, CancellationToken.None);
 
-        await act.Should().NotThrowAsync();
-        (await context.Releases.CountAsync()).Should().Be(2);
-        (await context.Releases.Select(r => r.Upc).ToListAsync()).Should().BeEquivalentTo(["042284197928", null]);
+        secondPage.Id.Should().Be(firstPage.Id);
+        (await context.Releases.CountAsync()).Should().Be(1);
+        (await context.Releases.Select(r => r.Upc).SingleAsync()).Should().Be("042284197928");
     }
 
     [Fact]
@@ -338,7 +402,7 @@ public class EfCatalogRepositoryTests
         await using var _ = connection;
         await using var __ = context;
         var repository = new EfCatalogRepository(context);
-        var created = await repository.CreateSharePageAsync(NewTrackResult(), CancellationToken.None);
+        var created = await repository.ResolveSharePageAsync(NewTrackResult(), CancellationToken.None);
 
         var result = await repository.GetSharePageAsync(created.Id, CancellationToken.None);
 
@@ -369,7 +433,7 @@ public class EfCatalogRepositoryTests
         await using var _ = connection;
         await using var __ = context;
         var repository = new EfCatalogRepository(context);
-        var created = await repository.CreateSharePageAsync(NewTrackResult(), CancellationToken.None);
+        var created = await repository.ResolveSharePageAsync(NewTrackResult(), CancellationToken.None);
         var links = await context.SharePageLinks.Include(l => l.ProviderLink).ThenInclude(pl => pl.Platform)
             .Where(l => l.SharePageId == created.Id).ToListAsync();
         var youTubeLink = links.Single(l => l.ProviderLink.Platform.Code == PlatformCodes.YouTube);

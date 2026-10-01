@@ -13,7 +13,14 @@ public sealed class StubStreamingProvider(string providerCode) : IStreamingProvi
 
     public StreamingResultType? LastRequestedType { get; private set; }
 
+    public IReadOnlyList<string> LinkPlatformCodes { get; } = [providerCode];
+
     public bool Supports(StreamingResultType type) => true;
+
+    public bool SupportsLookup(StreamingResultType type) => false;
+
+    public Task<IReadOnlyList<StreamingSearchResult>> LookupAsync(StreamingLookupKey key, CancellationToken cancellationToken) =>
+        throw new NotSupportedException();
 
     public Task<IReadOnlyList<StreamingSearchResult>> SearchAsync(string query, StreamingResultType type, CancellationToken cancellationToken)
     {

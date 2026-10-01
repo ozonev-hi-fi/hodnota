@@ -546,6 +546,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/catalog/sharepages/{id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/event-stream": unknown;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -588,6 +625,15 @@ export interface components {
             twoFactorCode?: null | string;
             twoFactorRecoveryCode?: null | string;
         };
+        PlatformRowResponse: {
+            platform: string;
+            type: components["schemas"]["PlatformType"];
+            state: components["schemas"]["PlatformRowState"];
+            /** Format: uri */
+            url: null | string;
+        };
+        /** @enum {unknown} */
+        PlatformRowState: "Checking" | "Found" | "OtherVersion" | "NotFound" | "Failed";
         /** @enum {unknown} */
         PlatformType: "StreamingService" | "DigitalStore" | "PhysicalStore" | "Aggregator" | "Database";
         RefreshRequest: {
@@ -621,19 +667,14 @@ export interface components {
             search: string;
             type: components["schemas"]["CandidateType"];
         };
-        SharePageLinkResponse: {
-            platform: string;
-            /** Format: uri */
-            url: string;
-            type: components["schemas"]["PlatformType"];
-        };
         SharePageResponse: {
             /** Format: uuid */
             id: string;
             type: components["schemas"]["CandidateType"];
             name: string;
             artist: string;
-            links: components["schemas"]["SharePageLinkResponse"][];
+            platforms: components["schemas"]["PlatformRowResponse"][];
+            isComplete: boolean;
         };
         TwoFactorRequest: {
             enable?: null | boolean;

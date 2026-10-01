@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.WebUtilities;
 
 namespace Hodnota.Infrastructure.Providers.YouTube;
 
-public sealed class YouTubeStreamingProvider(YouTubeService youTubeService) : IStreamingProvider
+public sealed class YouTubeStreamingProvider(YouTubeService youTubeService) : IStreamingProvider, IStreamingNameLookup
 {
     private const string YouTubeHost = "https://www.youtube.com";
     private const string YouTubeMusicHost = "https://music.youtube.com";
@@ -17,7 +17,20 @@ public sealed class YouTubeStreamingProvider(YouTubeService youTubeService) : IS
 
     public string ProviderCode => ProviderCodes.YouTube;
 
+    public IReadOnlyList<string> LinkPlatformCodes { get; } = [PlatformCodes.YouTube, PlatformCodes.YouTubeMusic];
+
     public bool Supports(StreamingResultType type) => true;
+
+    public bool SupportsLookup(StreamingResultType type) => false;
+
+    public Task<IReadOnlyList<StreamingSearchResult>> LookupAsync(StreamingLookupKey key, CancellationToken cancellationToken) =>
+        throw new NotSupportedException();
+
+    public async Task<IReadOnlyList<StreamingSearchResult>> FindByNameAsync(string artistName, string name, StreamingResultType type, CancellationToken cancellationToken)
+    {
+        var results = await SearchAsync($"{artistName} {name}", type, cancellationToken);
+        return [.. results.Where(result => result.Type == type && SearchResultNameMatcher.IsSameItem(result, artistName, name))];
+    }
 
     public async Task<IReadOnlyList<StreamingSearchResult>> SearchAsync(string query, StreamingResultType type, CancellationToken cancellationToken)
     {

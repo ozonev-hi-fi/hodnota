@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import {
   getSharePage,
+  type PlatformRow,
   type SharePage as SharePageData,
+  watchSharePage,
 } from '../api/catalog.ts';
 import { userFacingMessage } from '../api/errors.ts';
 import type { components } from '../api/generated/openapi-types.ts';
@@ -24,6 +26,7 @@ const CATEGORY_ORDER: Category[] = ['Listen', 'Buy', 'Discover'];
 function SharePage() {
   const { id } = useParams<{ id: string }>();
   const [sharePage, setSharePage] = useState<SharePageData | null>(null);
+  const [rows, setRows] = useState<PlatformRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -39,6 +42,7 @@ function SharePage() {
       .then((page) => {
         if (!cancelled) {
           setSharePage(page);
+          setRows(page.platforms);
         }
       })
       .catch((err: unknown) => {
@@ -56,6 +60,51 @@ function SharePage() {
       cancelled = true;
     };
   }, [id]);
+
+  // While some platform is still being checked, the server sends each result as it arrives.
+  // The stream replays the rows that are already settled first, so a row that changed between
+  // the page load and the stream opening is not missed.
+  const pageId = sharePage?.id;
+  const isComplete = sharePage?.isComplete ?? true;
+  useEffect(() => {
+    if (!pageId || isComplete) {
+      return;
+    }
+
+    let stopped = false;
+    const stopSpinners = (list: PlatformRow[]): PlatformRow[] =>
+      list.map((row) =>
+        row.state === 'Checking' ? { ...row, state: 'Failed' } : row,
+      );
+
+    const close = watchSharePage(pageId, {
+      onRow: (row) =>
+        setRows((current) =>
+          current.map((existing) =>
+            existing.platform === row.platform ? row : existing,
+          ),
+        ),
+      onComplete: () => undefined,
+      // The stream ended before every row was settled (a network drop, or the server's time
+      // limit). Results may have been saved meanwhile, so reload once; only rows that are still
+      // open after that stop spinning.
+      onError: () => {
+        getSharePage(pageId)
+          .then((page) => page.platforms)
+          .catch(() => null)
+          .then((fresh) => {
+            if (!stopped) {
+              setRows((current) => stopSpinners(fresh ?? current));
+            }
+          });
+      },
+    });
+
+    return () => {
+      stopped = true;
+      close();
+    };
+  }, [pageId, isComplete]);
 
   if (loading) {
     return <h1>Loading…</h1>;
@@ -75,25 +124,20 @@ function SharePage() {
     );
   }
 
-  const linksByCategory: Record<Category, { platform: string; url: string }[]> =
-    {
-      Listen: [],
-      Buy: [],
-      Discover: [],
-    };
-  for (const link of sharePage.links) {
-    linksByCategory[CATEGORY_LABELS[link.type]].push({
-      platform: link.platform,
-      url: link.url,
-    });
+  const rowsByCategory: Record<Category, PlatformRow[]> = {
+    Listen: [],
+    Buy: [],
+    Discover: [],
+  };
+  for (const row of rows) {
+    rowsByCategory[CATEGORY_LABELS[row.type]].push(row);
   }
 
-  const discogsLink = linksByCategory.Discover.find(
-    (link) => link.platform === 'discogs',
-  );
-  const tidalLink = linksByCategory.Listen.find(
-    (link) => link.platform === 'tidal',
-  );
+  const linkOf = (platform: string) =>
+    rows.find((row) => row.platform === platform && row.state !== 'NotFound')
+      ?.url;
+  const discogsLink = linkOf('discogs');
+  const tidalLink = linkOf('tidal');
 
   return (
     <>
@@ -105,13 +149,13 @@ function SharePage() {
         <ProviderLinkGroup
           key={category}
           category={category}
-          links={linksByCategory[category]}
+          rows={rowsByCategory[category]}
         />
       ))}
       {discogsLink && (
         <p className="small text-muted">
           Data provided by{' '}
-          <a href={discogsLink.url} target="_blank" rel="noreferrer">
+          <a href={discogsLink} target="_blank" rel="noreferrer">
             Discogs
           </a>
           .
@@ -120,7 +164,7 @@ function SharePage() {
       {tidalLink && (
         <p className="small text-muted">
           Content provided by{' '}
-          <a href={tidalLink.url} target="_blank" rel="noreferrer">
+          <a href={tidalLink} target="_blank" rel="noreferrer">
             TIDAL
           </a>
           .

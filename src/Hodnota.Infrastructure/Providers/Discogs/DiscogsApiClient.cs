@@ -11,21 +11,17 @@ public sealed class DiscogsApiClient(IHttpClientFactory httpClientFactory, ILogg
     private const int ReleaseResultLimit = 25;
 
     public Task<DiscogsSearchResponse> SearchMastersAsync(string query, CancellationToken cancellationToken) =>
-        SearchAsync(query, "master", MasterResultLimit, cancellationToken);
+        GetAsync(new Dictionary<string, string?> { ["q"] = query, ["type"] = "master", ["per_page"] = MasterResultLimit.ToString() }, cancellationToken);
 
     public Task<DiscogsSearchResponse> SearchReleasesAsync(string query, CancellationToken cancellationToken) =>
-        SearchAsync(query, "release", ReleaseResultLimit, cancellationToken);
+        GetAsync(new Dictionary<string, string?> { ["q"] = query, ["type"] = "release", ["per_page"] = ReleaseResultLimit.ToString() }, cancellationToken);
 
-    private async Task<DiscogsSearchResponse> SearchAsync(string query, string type, int resultLimit, CancellationToken cancellationToken)
+    public Task<DiscogsSearchResponse> LookupByBarcodeAsync(string barcode, CancellationToken cancellationToken) =>
+        GetAsync(new Dictionary<string, string?> { ["barcode"] = barcode, ["type"] = "release", ["per_page"] = ReleaseResultLimit.ToString() }, cancellationToken);
+
+    private async Task<DiscogsSearchResponse> GetAsync(Dictionary<string, string?> queryParams, CancellationToken cancellationToken)
     {
         var client = httpClientFactory.CreateClient(DiscogsConfiguration.ApiHttpClientName);
-
-        var queryParams = new Dictionary<string, string?>
-        {
-            ["q"] = query,
-            ["type"] = type,
-            ["per_page"] = resultLimit.ToString(),
-        };
 
         using var request = new HttpRequestMessage(HttpMethod.Get, QueryHelpers.AddQueryString("database/search", queryParams));
         var response = await StreamingSearchResponseReader.SendAsync(client, request, "Discogs", cancellationToken);

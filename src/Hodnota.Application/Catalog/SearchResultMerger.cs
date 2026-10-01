@@ -22,10 +22,10 @@ public static class SearchResultMerger
                 var key = SearchResultKey.Build(result);
                 if (index.TryGetValue(key, out var row))
                 {
-                    // Already-claimed key: union links only. A second match candidate is dropped,
-                    // not appended as its own row — appending would reintroduce the duplicate this
-                    // feature exists to remove.
-                    row.AddLinks(result.Links);
+                    // Already-claimed key: union links, and fill an ISRC/UPC the owner lacks. A second
+                    // match candidate is dropped, not appended as its own row — appending would
+                    // reintroduce the duplicate this feature exists to remove.
+                    row.Add(result);
                 }
                 else
                 {
@@ -44,7 +44,18 @@ public static class SearchResultMerger
         private readonly List<ProviderLinkCandidate> _links = [.. owner.Links];
         private readonly HashSet<string> _platformCodes = [.. owner.Links.Select(link => link.PlatformCode)];
 
-        public void AddLinks(IReadOnlyList<ProviderLinkCandidate> links)
+        // Providers arrive in trust order, so the first non-empty code is the most trusted one.
+        private string? _isrc = owner.Isrc;
+        private string? _upc = owner.Upc;
+
+        public void Add(StreamingSearchResult result)
+        {
+            _isrc ??= result.Isrc;
+            _upc ??= result.Upc;
+            AddLinks(result.Links);
+        }
+
+        private void AddLinks(IReadOnlyList<ProviderLinkCandidate> links)
         {
             foreach (var link in links)
             {
@@ -58,6 +69,6 @@ public static class SearchResultMerger
             }
         }
 
-        public StreamingSearchResult ToResult() => owner with { Links = _links };
+        public StreamingSearchResult ToResult() => owner with { Links = _links, Isrc = _isrc, Upc = _upc };
     }
 }

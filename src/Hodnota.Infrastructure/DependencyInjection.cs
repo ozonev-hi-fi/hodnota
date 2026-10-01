@@ -166,8 +166,14 @@ public static class DependencyInjection
             services.AddScoped<IStreamingProvider, QobuzStreamingProvider>();
         }
 
+        services.AddSingleton<InProcessEnrichmentQueue>();
+        services.AddSingleton<IEnrichmentQueue>(serviceProvider => serviceProvider.GetRequiredService<InProcessEnrichmentQueue>());
+        services.AddSingleton<IShareEventHub, ShareEventHub>();
+        services.AddHostedService<EnrichmentWorker>();
+
         services.AddScoped<ICatalogRepository, EfCatalogRepository>();
         services.AddScoped<CatalogSearchService>();
+        services.AddScoped<CatalogEnrichmentService>();
         services.AddScoped<SharePageService>();
 
         return services;

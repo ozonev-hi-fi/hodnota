@@ -19,6 +19,30 @@ public class SearchResultMergerTests
             [.. links.Select(l => new ProviderLinkCandidate(l.PlatformCode, l.ExternalId, new Uri($"https://example.com/{l.PlatformCode}/{l.ExternalId}")))]);
 
     [Fact]
+    public void Merge_OwnerHasNoUpc_TakesTheUpcFromTheNextProviderThatHasOne()
+    {
+        var discogs = NewResult("OK Computer", "Radiohead", StreamingResultType.Release, ("discogs", "master:1"));
+        var qobuz = NewResult("OK Computer", "Radiohead", StreamingResultType.Release, ("qobuz", "q1")) with { Upc = "0724385522925" };
+        var tidal = NewResult("OK Computer", "Radiohead", StreamingResultType.Release, ("tidal", "t1")) with { Upc = "724385522925" };
+
+        var merged = SearchResultMerger.Merge([[discogs], [qobuz], [tidal]]);
+
+        merged.Should().ContainSingle();
+        merged[0].Upc.Should().Be("0724385522925");
+    }
+
+    [Fact]
+    public void Merge_OwnerHasAnIsrc_KeepsIt()
+    {
+        var qobuz = NewResult("Song", "Artist", links: [("qobuz", "q1")]) with { Isrc = "USUM71703861" };
+        var tidal = NewResult("Song", "Artist", links: [("tidal", "t1")]) with { Isrc = "GBAAA0000001" };
+
+        var merged = SearchResultMerger.Merge([[qobuz], [tidal]]);
+
+        merged[0].Isrc.Should().Be("USUM71703861");
+    }
+
+    [Fact]
     public void Merge_SameTrackFromTwoProviders_ReturnsOneRowCarryingBothProvidersLinks()
     {
         var spotify = NewResult("Nothing Else Matters", "Metallica", links: [("spotify", "sp1")]);

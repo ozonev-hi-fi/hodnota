@@ -10,7 +10,44 @@ public sealed class QobuzStreamingProvider(QobuzApiClient apiClient) : IStreamin
 
     public string ProviderCode => ProviderCodes.Qobuz;
 
+    public IReadOnlyList<string> LinkPlatformCodes { get; } = [PlatformCodes.Qobuz];
+
     public bool Supports(StreamingResultType type) => true;
+
+    public bool SupportsLookup(StreamingResultType type) => true;
+
+    public async Task<IReadOnlyList<StreamingSearchResult>> LookupAsync(StreamingLookupKey key, CancellationToken cancellationToken)
+    {
+        if (key.Type == StreamingResultType.Track)
+        {
+            var response = await apiClient.SearchAsync(key.Codes[0], key.Type, cancellationToken);
+            return
+            [
+                .. (response.Tracks?.Items ?? [])
+                    .Where(IsUsable)
+                    .Where(track => CatalogKeys.NormalizeIsrc(track.Isrc) is { } isrc && key.Codes.Contains(isrc))
+                    .Select(ToSearchResult),
+            ];
+        }
+
+        foreach (var code in key.Codes.OrderBy(code => code.Length == 13 ? 0 : 1).Take(2))
+        {
+            var response = await apiClient.SearchAsync(code, key.Type, cancellationToken);
+            List<StreamingSearchResult> albums =
+            [
+                .. (response.Albums?.Items ?? [])
+                    .Where(IsUsable)
+                    .Where(album => CatalogKeys.BarcodeVariants(album.Upc).Any(key.Codes.Contains))
+                    .Select(ToSearchResult),
+            ];
+            if (albums.Count > 0)
+            {
+                return albums;
+            }
+        }
+
+        return [];
+    }
 
     public async Task<IReadOnlyList<StreamingSearchResult>> SearchAsync(string query, StreamingResultType type, CancellationToken cancellationToken)
     {
