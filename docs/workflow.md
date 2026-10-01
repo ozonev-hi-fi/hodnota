@@ -2,7 +2,7 @@
 
 Day-to-day cheat sheet for the branching/versioning policy decided in [decisions/0001-branching-and-versioning-strategy.md](decisions/0001-branching-and-versioning-strategy.md). See that ADR for the reasoning; this file is just the commands.
 
-A rough or not-yet-prioritized idea goes in [ideas.md](ideas.md) first, not straight into [roadmap.md](roadmap.md). It gets a one-line roadmap item once prioritized, and an ADR once work on it starts.
+A rough or not-yet-prioritized idea goes in [ideas.md](ideas.md) first, not straight into [roadmap.md](roadmap.md). It gets a one-line roadmap item once prioritized, and an ADR when work on it starts, if it needs one (see [decisions/README.md](decisions/README.md)).
 
 ## Starting a feature
 

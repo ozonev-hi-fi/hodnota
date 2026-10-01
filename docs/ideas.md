@@ -7,7 +7,7 @@ Each entry has:
 - **Problem** — what's missing or awkward today.
 - **Example** — a concrete case.
 - **Settled** — decisions already made about the idea, even though nothing is built yet.
-- **Open questions** — left for the ADR, written when work on the idea starts (see [workflow.md](workflow.md)).
+- **Open questions** — left for the ADR (if the idea needs one), written when work on the idea starts (see [workflow.md](workflow.md)).
 
 An idea moves to `roadmap.md` as one line once it's prioritized; an ADR entry shrinks this one to a pointer once it's accepted.
 
@@ -19,13 +19,13 @@ An idea moves to `roadmap.md` as one line once it's prioritized; an ADR entry sh
 
 **Problem.** The search field only accepts free text today (`web/src/pages/SearchPage.tsx` → `POST /api/catalog/search`). Users often already have a link to the track or release from one service and have to retype the artist/title instead of just using it.
 
-**Example.** Paste `https://youtu.be/1gvOSUZGXdo?si=FdzujYXA8jJSzPck` → the app reads the video (official audio `sg8Y68jzDIY`) and opens a share page with YouTube, YouTube Music, Spotify, Qobuz, Tidal, etc. Paste `https://open.qobuz.com/track/455140968` or `https://play.qobuz.com/album/plputwne9qt9g` (Perfect Cycle – *To Whom It May Concern*) → same flow, starting from Qobuz instead.
+**Example.** Paste `https://youtu.be/1gvOSUZGXdo?si=EXAMPLE123` (a video that isn't the official audio) → the app reads the video, finds the official audio `sg8Y68jzDIY` by search, and opens a share page with YouTube, YouTube Music, Spotify, Qobuz, Tidal, etc. Paste `https://music.youtube.com/watch?v=sg8Y68jzDIY` (the official audio itself) → the same page, and the pasted link becomes the YouTube link with no search. Paste `https://open.qobuz.com/track/455140968` or `https://play.qobuz.com/album/plputwne9qt9g` (Perfect Cycle – *To Whom It May Concern*) → same flow, starting from Qobuz instead.
 
 **Settled:**
 1. A link is detected only when the whole trimmed input is one absolute `http(s)` URL. Free text mixed with a URL is treated as plain text search, not as a link.
 2. Only track and release links are in scope — the catalog has no artist kind yet (see "Artist share pages" below). An artist or playlist link, or any link from a site we don't recognize, is reported as not supported (see the table below) rather than guessed at.
 3. The pasted link is the *only* source of information: the matching provider is asked to resolve its own id, and whatever it returns (artist, title, ISRC/UPC if any) drives everything downstream. The Song/Album radio on the search form is ignored — the link's own type wins.
-4. The catalog is checked first (`ProviderLink (PlatformId, ExternalId)` is already unique and already looked up by resolve). If the pasted id is already linked to a catalog entity, the user goes straight to its existing share page, with no provider call at all.
+4. The catalog is checked first (`ProviderLink (PlatformId, ExternalId)` is already unique and already looked up by resolve). If the pasted id is already linked to a catalog entity, the user goes straight to its existing share page, with no call to read the pasted id. The rest is the same as a click on an existing item in [decisions/0014](decisions/0014-resolve-time-catalog-enrichment.md): platforms whose last check failed, or that were never checked, are checked again.
 5. On a successful read, the user goes directly to the share page — found or created the same way a clicked search result already works (`SharePageService.ResolveAsync` and friends). There's no extra confirmation step in between.
 6. On failure, the search dropdown shows one row that can't be clicked, with text that depends on the reason:
 
@@ -34,16 +34,27 @@ An idea moves to `roadmap.md` as one line once it's prioritized; an ADR entry sh
    | Unrecognized site | "Links from this site aren't supported" |
    | Recognized platform, no provider implemented yet (e.g. Deezer) | "Deezer links aren't supported yet" |
    | Provider not currently running (Spotify dormant, Qobuz without credentials) | "Can't read Spotify links right now" |
-   | Artist or playlist link | "Artist links aren't supported yet" |
+   | Artist link | "Artist links aren't supported yet" |
+   | Playlist link | "Playlist links aren't supported" |
+   | Short link that needs a redirect (point 11) | "This short link isn't supported, open it and copy the full link" |
    | Item not found, or the provider call failed | "Could not find this item, try another link" |
+
+   A YouTube Music album playlist (`OLAK5uy_…`) is an album, not a playlist, and is read as a release.
 
    There is no text-search fallback and no fetching/scraping of the pasted page — only a provider's own API is ever called, and only for sites we already recognize.
 7. The canonical link is always rebuilt from provider + id, the same way every other link on a share page already is (e.g. `YouTubeStreamingProvider`'s `BuildUrl`). The pasted URL itself — tracking parameters (`si=`), short-link form, locale prefix — is never stored or shown.
-8. The page shows one link per platform, as it does today. A pasted link only ever *becomes* its platform's link if that platform has no link yet; it never overwrites or duplicates an existing one. There's deliberately no "other links" bucket for extra pasted items (e.g. a second video of the same song) — the page is shared by everyone who opens it, and a bucket like that would grow without any moderation step. A pasted YouTube *video* link is read only to learn the artist and title; the official audio track is what ends up as the YouTube/YouTube Music link (see point 10), and the video itself is not kept anywhere.
-9. A page created from a non-YouTube paste still gets YouTube/YouTube Music links through the existing enrichment rule in [decisions/0014](decisions/0014-resolve-time-catalog-enrichment.md) (one by-name YouTube search per item that has no YouTube link yet) — nothing extra is needed for that. Note the YouTube Data API `search.list` quota is 100 calls/day for the whole project (see [youtube-music-search.md](youtube-music-search.md)); a catalog hit (point 4) costs 0, and reading a pasted YouTube link itself costs 1 unit of the much larger (10,000/day) cheap bucket, not a `search.list` call.
-10. Matching a pasted YouTube link to a real artist/title is best-effort and can fail closed: Music category only, "Artist - Topic" channel preferred, and if the parse isn't clear, it's reported as "Could not find, try another link" rather than guessed. The actual matching rules live in [youtube-music-search.md](youtube-music-search.md) and aren't restated here.
-11. Short links that need an HTTP redirect to resolve (e.g. `spotify.link/AbC123`) are out of scope for v1 — following a user-supplied redirect is a server-side request forgery (SSRF) surface and deserves its own design. They get "This short link isn't supported, open it and copy the full link."
-12. Logged in users only, same as search today (`[Authorize]` on `/api/catalog/search`). Future, not-yet-designed users of this same mechanism: a mobile share-sheet integration and a Telegram bot that watches for streaming links (both mentioned in `architecture.md`'s Hosting/roadmap notes) will need their own auth story.
+8. The page shows one link per platform, as it does today. A pasted link never adds a second link for a platform. It fills its platform's slot when the slot is empty, and it replaces an existing link only under [decisions/0014](decisions/0014-resolve-time-catalog-enrichment.md)'s rule (an exact-key match replaces a name match). There's deliberately no "other links" bucket for extra pasted items (e.g. a second video of the same song). The page is shared by everyone who opens it, and a bucket like that would grow without any moderation step. A pasted YouTube video is kept as the YouTube/YouTube Music link only when its uploader is the artist: the artist's own channel or its automatic "Artist - Topic" channel. That is the same uploader rule 0014's enrichment search uses (`SearchResultNameMatcher`). Any other pasted video (a music video, a fan upload) is only read to learn the artist and title, and isn't kept anywhere.
+9. A page created from a non-YouTube paste still gets YouTube/YouTube Music links through the existing enrichment rule in [decisions/0014](decisions/0014-resolve-time-catalog-enrichment.md) (one by-name YouTube search per item that has no YouTube link yet) — nothing extra is needed for that. YouTube Data API cost of a paste (`search.list` is 100 calls/day for the whole project, see [youtube-music-search.md](youtube-music-search.md)):
+
+   | Paste | YouTube cost |
+   |---|---|
+   | Already in the catalog (point 4) | 0, unless 0014 re-checks a failed or never-checked YouTube row |
+   | YouTube video from the artist's own or "Topic" channel | 1 unit (`videos.list`, 10,000/day bucket). It becomes the link (point 8), so no search |
+   | Any other YouTube video | 1 unit + 1 `search.list` call (0014's by-name search) |
+   | Non-YouTube link, the item has no YouTube link yet | 1 `search.list` call (0014's by-name search) |
+10. Matching a pasted YouTube link to a real artist/title is best-effort and can fail closed: Music category only, "Artist - Topic" channel preferred, and if the parse isn't clear, it's reported as not found (see the table in point 6) rather than guessed. The actual matching rules live in [youtube-music-search.md](youtube-music-search.md) and aren't restated here.
+11. Short links that need an HTTP redirect to resolve (e.g. `spotify.link/AbC123`) are out of scope for v1 — following a user-supplied redirect is a server-side request forgery (SSRF) surface and deserves its own design. They get the short-link text from the table in point 6.
+12. Logged in users only, same as search today (`[Authorize]` on `/api/catalog/search`). Future, not-yet-designed users of this same mechanism: a mobile share-sheet integration and a Telegram bot that watches for streaming links (both mentioned in [architecture.md](architecture.md)'s Components section) will need their own auth story.
 
 **Known limitation carried over from [decisions/0014](decisions/0014-resolve-time-catalog-enrichment.md):** YouTube has no exact lookup, so even the exact item the user pasted shows on its own page as a name match ("(other version)"), not as a confirmed exact match.
 
@@ -69,7 +80,7 @@ An idea moves to `roadmap.md` as one line once it's prioritized; an ADR entry sh
 
 **Problem.** `StreamingResultType` only has `Track` and `Release` — there's no artist kind anywhere in search, the catalog, or share pages. An artist link (pasted, see above) or an artist search result currently has nowhere to go.
 
-Until this exists, a pasted artist link is reported as "Artist links aren't supported yet" (see "Paste a link instead of searching" above).
+Until this exists, a pasted artist link is reported as not supported yet (see the table in "Paste a link instead of searching" above).
 
 ---
 
@@ -105,11 +116,27 @@ Search shows matching catalog items first, so users pick an existing item instea
 
 ---
 
+## Discogs link on song pages
+
+**Status:** idea.
+
+A song's share page has no Discogs row, because Discogs is album-only. It could link to the master of the song's album. Deferred in [decisions/0014](decisions/0014-resolve-time-catalog-enrichment.md)'s "Out of scope" section.
+
+---
+
+## Split the provider trust order
+
+**Status:** idea.
+
+`ProviderTrustOrder` (`discogs, qobuz, tidal, spotify, youtube`) decides two things at once: whose metadata wins when providers disagree (artist spelling, release date), and which search rows come first. Splitting it into a catalog-authority order and a display order is deferred in [decisions/0014](decisions/0014-resolve-time-catalog-enrichment.md)'s "Metadata authority" and "Out of scope" sections. Working hypothesis from the original roadmap brief: Discogs first for release/artist metadata.
+
+---
+
 ## Multiple UI/UX themes
 
 **Status:** idea.
 
-Dark, light, a classic MS-DOS-style theme, possibly more — see [architecture.md](architecture.md)'s UX Notes section.
+Dark, light, a classic MS-DOS-style theme, possibly more.
 
 ---
 
@@ -117,4 +144,4 @@ Dark, light, a classic MS-DOS-style theme, possibly more — see [architecture.m
 
 **Status:** idea.
 
-Localization at every layer: API, Web UI, mobile app — see [architecture.md](architecture.md)'s UX Notes section.
+Localization at every layer: API, Web UI, mobile app.
