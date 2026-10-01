@@ -104,28 +104,34 @@ public class TidalStreamingProviderLookupTests
     }
 
     [Fact]
-    public async Task LookupAsync_Release_NothingForTheFirstFormTriesTheSecondForm()
+    public async Task LookupAsync_Release_AsksOnceBecauseTidalFindsAnyFormOfTheBarcode()
     {
-        var (provider, handler) = NewProvider(
-            Document(AlbumData("8", "5099902988085")),
-            Document(AlbumData("7", "0602537817016"), ArtistJson));
+        var (provider, handler) = NewProvider(Document(AlbumData("7", "0602537817016"), ArtistJson));
 
         var results = await provider.LookupAsync(ReleaseKey("602537817016", "0602537817016"), CancellationToken.None);
 
         results.Select(r => r.Links.Single().ExternalId).Should().Equal("7");
-        handler.Requests.Should().HaveCount(2);
-        handler.Requests[1].RequestUri!.Query.Should().Contain("filter%5BbarcodeId%5D=0602537817016");
+        handler.Requests.Should().ContainSingle();
     }
 
     [Fact]
-    public async Task LookupAsync_NoMatchForAnyForm_ReturnsEmpty()
+    public async Task LookupAsync_Release_ReturnedAlbumWithAnotherBarcode_IsIgnored()
     {
-        var (provider, handler) = NewProvider("""{"data":[],"included":[]}""", "{}");
+        var (provider, _) = NewProvider(Document(AlbumData("8", "5099902988085")));
 
         var results = await provider.LookupAsync(ReleaseKey("602537817016", "0602537817016"), CancellationToken.None);
 
         results.Should().BeEmpty();
-        handler.Requests.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task LookupAsync_NothingFound_ReturnsEmpty()
+    {
+        var (provider, _) = NewProvider("""{"data":[],"included":[]}""");
+
+        var results = await provider.LookupAsync(ReleaseKey("602537817016", "0602537817016"), CancellationToken.None);
+
+        results.Should().BeEmpty();
     }
 
     [Fact]

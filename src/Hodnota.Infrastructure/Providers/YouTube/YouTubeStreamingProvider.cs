@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.WebUtilities;
 
 namespace Hodnota.Infrastructure.Providers.YouTube;
 
-public sealed class YouTubeStreamingProvider(YouTubeService youTubeService) : IStreamingProvider
+public sealed class YouTubeStreamingProvider(YouTubeService youTubeService) : IStreamingProvider, IStreamingNameLookup
 {
     private const string YouTubeHost = "https://www.youtube.com";
     private const string YouTubeMusicHost = "https://music.youtube.com";
@@ -21,11 +21,20 @@ public sealed class YouTubeStreamingProvider(YouTubeService youTubeService) : IS
 
     public bool Supports(StreamingResultType type) => true;
 
-    // YouTube has no ISRC/UPC lookup and its search quota is small, so enrichment never calls it again.
+    // YouTube has no ISRC/UPC lookup. Enrichment finds an item there by name instead (FindByNameAsync).
     public bool SupportsLookup(StreamingResultType type) => false;
 
     public Task<IReadOnlyList<StreamingSearchResult>> LookupAsync(StreamingLookupKey key, CancellationToken cancellationToken) =>
         throw new NotSupportedException();
+
+    // One search call per item, and only when the item has no YouTube link yet: a search costs from a
+    // small daily quota. The query is the item's own artist and title, not the user's typed text, and a
+    // result is accepted only when it proves the artist and the exact title (SearchResultNameMatcher).
+    public async Task<IReadOnlyList<StreamingSearchResult>> FindByNameAsync(string artistName, string name, StreamingResultType type, CancellationToken cancellationToken)
+    {
+        var results = await SearchAsync($"{artistName} {name}", type, cancellationToken);
+        return [.. results.Where(result => result.Type == type && SearchResultNameMatcher.IsSameItem(result, artistName, name))];
+    }
 
     public async Task<IReadOnlyList<StreamingSearchResult>> SearchAsync(string query, StreamingResultType type, CancellationToken cancellationToken)
     {

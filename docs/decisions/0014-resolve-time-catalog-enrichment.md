@@ -92,18 +92,24 @@ Each provider gets a lookup method next to its search method. Confirmed against 
 | Discogs | not supported | `GET /database/search?barcode=&type=release`; the result carries `master_id`, so the link goes to the master when there is one, otherwise to the release (the same `master:`/`release:` ids as [decisions/0012](0012-discogs-provider.md)) |
 | Spotify | `GET /search?q=isrc:` | `GET /search?q=upc:`, known to miss existing albums |
 | Qobuz | no lookup endpoint; a search with the code as the query, then an exact-code filter | the same |
-| YouTube | not supported | not supported |
+| YouTube | not supported; found by artist and title instead, see "YouTube" below | the same |
 
 Status after the first live check (2026-09-30, real providers, a song and an album):
 
-- **Tidal** works: both the ISRC and the UPC lookup returned the exact item.
-- **Discogs** is implemented from the documentation. In the live check its barcode lookup found no verified release for the album tried, so the row fell back to the name match. It is not confirmed whether that album simply has no release with that barcode or the barcode query needs more work.
+- **Tidal** works: both the ISRC and the UPC lookup returned the exact item. A probe on 2026-10-01 showed that it needs no country code and finds an album by its 12, 13 and 14 digit barcode alike, so it is asked once. One ISRC can return several tracks (seven for a popular song), which is why the provider keeps only an item whose own code matches.
+- **Discogs** works (a probe on 2026-10-01): it found *Nevermind* by its barcode, in the 12 and in the 13 digit form alike, with the release's `master_id` and a `barcode` field. For three other albums it found no release with the barcode Tidal gave, and a plain text search of the number found nothing either, so Discogs does not have those pressings and the row keeps the name match. Because the forms behave the same, it is asked once. Coverage depends on the pressing: a barcode from another edition finds nothing.
 - **Spotify** could not be checked: it answered `403` (no Premium subscription, [decisions/0011](0011-spotify-provider-and-cross-provider-result-merging.md)), so its row showed "couldn't check right now".
-- **Qobuz** has no lookup yet. Its approach is unconfirmed and needs a live probe with the dev credentials. Until then Qobuz's row keeps the search row's link as a name match.
+- **Qobuz** works through its search (a probe on 2026-10-01): the ISRC, or the barcode in the 13 digit form Qobuz stores, used as the query text finds the item, and the provider then checks the code on each result. A 12 digit barcode finds nothing, and `album/get` with a barcode answers 404, so the 13 digit form is asked first.
 
-### YouTube: no new call
+### YouTube: one search by name, and only when the item has no YouTube link
 
-YouTube has no ISRC/UPC, its album playlists are free-text titles from any channel, and `search.list` is limited to 100 calls per day per project. Enrichment makes no YouTube call: the YouTube and YouTube Music rows show the link from the search row, if there is one, as a name match, or "not found".
+YouTube has no ISRC/UPC lookup, its album playlists are free-text titles from any uploader, and `search.list` is limited to 100 calls per day per project. The first version of this decision made no YouTube call at resolve time. A live search for "metalica load" showed the cost: YouTube returned only fan uploads, whose "artist" is the uploader's channel, so none merged with the album found on Qobuz and Tidal, and the page had no YouTube link at all.
+
+Enrichment now searches YouTube once for an item that has no YouTube link yet. The query is the item's own artist and title from the catalog, not the user's typed text. An item that the search row already linked costs no call. A result is accepted only when its **uploader is the artist** (the channel is the artist's own, or its automatic "Artist - Topic" channel) and its title, after noise like "(Full Album)" is removed, equals the item's title (`SearchResultNameMatcher`, the same noise rules as [decisions/0011](0011-spotify-provider-and-cross-provider-result-merging.md)). The first accepted result is kept, as a name match, for both the YouTube and the YouTube Music row. Each such search costs one of the 100 daily calls.
+
+The first version of this rule trusted the title: a result was accepted when its title contained the artist and the album. A live resolve of *Ecce Lex* by Nostromo then linked a pirate upload with a perfect title. A title proves nothing, so the rule now trusts the uploader. The cost is that most YouTube rows will say "not found" until the real fix. The investigation and the fix plan are in [youtube-music-search.md](../youtube-music-search.md).
+
+**Not solved:** the official YouTube Music album playlists (ids that start with `OLAK5uy_`). Their channel is "YouTube", their title is "Album - Load", and the artist is nowhere in their metadata. A search for "Metallica Load" returned none of them (checked 2026-10-01). Finding them needs another route; verifying the artist would take one more call per candidate (`playlistItems.list`, whose items name the "Artist - Topic" channel).
 
 ### One share page per item
 
@@ -133,9 +139,9 @@ Named follow-up work, each for its own ADR or roadmap item:
 
 - **Scheduled refresh.** A background job that re-checks existing links from time to time (is the item still on the service?) and re-checks "not found" platforms more often (has it appeared?). It uses the saved check dates.
 - **User-suggested links.** A viewer suggests a link instead of, or in addition to, an existing one; hodnota checks that the link is valid and fits the page.
-- **Several versions per platform.** Services often have the original, a remaster, and reissues of the same release; the page should be able to show all of them. This changes the one-link-per-platform unique index from [decisions/0007](0007-catalog-data-model.md).
+- **Several versions per platform.** Services often have the original, a remaster, and reissues of the same release; the page should be able to show all of them. Example: Metallica's *Load* has two official YouTube Music album playlists (`OLAK5uy_nn9_UEJTyKvU65JlglPBRMp9eWyxOTFWc` and `OLAK5uy_nf8K8yHuLThX0qvPGCIM2eBKndPale4vU`); the first version of this work shows one of them. This changes the one-link-per-platform unique index from [decisions/0007](0007-catalog-data-model.md).
 - **Catalog-first search.** Search shows matching catalog items first, so users pick an existing item instead of searching the providers again.
-- **YouTube strict matching**, for example preferring official "Artist - Topic" channels and YouTube Music album playlists.
+- **Official YouTube Music album playlists** (`OLAK5uy_…`), preferred over fan playlists. They are not found by `search.list`, see "YouTube" above.
 - **A Discogs link on song pages**, pointing to the song's album master.
 - **Splitting `ProviderTrustOrder`** into a catalog-authority order and a display order.
 - **`StreamingResultType.Artist`**, still deferred as in [decisions/0012](0012-discogs-provider.md).
@@ -149,6 +155,6 @@ Named follow-up work, each for its own ADR or roadmap item:
 - One new table (check results) and a migration. `ProviderLink.Confidence` and `LastVerifiedUtc`, unused since [decisions/0007](0007-catalog-data-model.md), are now filled.
 - A merged search row (and so the cache) can carry an ISRC/UPC from a lower-ranked provider when the first result has none.
 - The queue and the live-update hub are in memory: they serve one server instance, like the search candidate cache. A second instance needs a shared queue and event channel.
-- A provider that has no lookup (YouTube, and Qobuz until it gets one) can only ever give a name match, so its row shows "(other version)" even when the link is the very item the user picked.
+- A provider that has no lookup (YouTube) can only ever give a name match, so its row shows "(other version)" even when the link is the very item the user picked.
 - The concurrency test for two simultaneous resolves (`EfCatalogRepositoryConcurrencyTests`) could already fail on `develop` with a Postgres deadlock, about once in eight runs. Resolve now retries a deadlock victim like the other conflicts.
 - [roadmap.md](../roadmap.md)'s enrichment item points to this ADR, and the follow-ups above are added as future items. [architecture.md](../architecture.md)'s catalog and data-model sections are updated when the implementation lands.

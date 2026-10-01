@@ -14,10 +14,43 @@ public sealed class QobuzStreamingProvider(QobuzApiClient apiClient) : IStreamin
 
     public bool Supports(StreamingResultType type) => true;
 
-    public bool SupportsLookup(StreamingResultType type) => false;
+    public bool SupportsLookup(StreamingResultType type) => true;
 
-    public Task<IReadOnlyList<StreamingSearchResult>> LookupAsync(StreamingLookupKey key, CancellationToken cancellationToken) =>
-        throw new NotSupportedException();
+    // Qobuz has no lookup by code. A search with the code as its text finds the item when the code is
+    // written as Qobuz stores it, so the results are checked against the code afterwards. Albums are
+    // stored with 13 digits (a 12 digit query finds nothing, confirmed live on 2026-10-01).
+    public async Task<IReadOnlyList<StreamingSearchResult>> LookupAsync(StreamingLookupKey key, CancellationToken cancellationToken)
+    {
+        if (key.Type == StreamingResultType.Track)
+        {
+            var response = await apiClient.SearchAsync(key.Codes[0], key.Type, cancellationToken);
+            return
+            [
+                .. (response.Tracks?.Items ?? [])
+                    .Where(IsUsable)
+                    .Where(track => CatalogKeys.NormalizeIsrc(track.Isrc) is { } isrc && key.Codes.Contains(isrc))
+                    .Select(ToSearchResult),
+            ];
+        }
+
+        foreach (var code in key.Codes.OrderBy(code => code.Length == 13 ? 0 : 1).Take(2))
+        {
+            var response = await apiClient.SearchAsync(code, key.Type, cancellationToken);
+            List<StreamingSearchResult> albums =
+            [
+                .. (response.Albums?.Items ?? [])
+                    .Where(IsUsable)
+                    .Where(album => CatalogKeys.BarcodeVariants(album.Upc).Any(key.Codes.Contains))
+                    .Select(ToSearchResult),
+            ];
+            if (albums.Count > 0)
+            {
+                return albums;
+            }
+        }
+
+        return [];
+    }
 
     public async Task<IReadOnlyList<StreamingSearchResult>> SearchAsync(string query, StreamingResultType type, CancellationToken cancellationToken)
     {

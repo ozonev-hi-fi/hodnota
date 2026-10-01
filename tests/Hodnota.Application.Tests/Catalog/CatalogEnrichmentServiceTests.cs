@@ -208,6 +208,69 @@ public class CatalogEnrichmentServiceTests
         await tidal.DidNotReceiveWithAnyArgs().SearchAsync(default!, default, default);
     }
 
+    private static IStreamingProvider NewNameLookupProvider(string providerCode, params string[] platformCodes)
+    {
+        var provider = Substitute.For<IStreamingProvider, IStreamingNameLookup>();
+        provider.ProviderCode.Returns(providerCode);
+        provider.LinkPlatformCodes.Returns(platformCodes.Length > 0 ? platformCodes : [providerCode]);
+        provider.Supports(Arg.Any<StreamingResultType>()).Returns(true);
+        provider.SupportsLookup(Arg.Any<StreamingResultType>()).Returns(false);
+        return provider;
+    }
+
+    [Fact]
+    public async Task EnrichAsync_ProviderFoundByNameOnly_IsSearchedByArtistAndTitleEvenWhenTheItemHasAKey()
+    {
+        var youTube = NewNameLookupProvider("youtube");
+        var link = Link("youtube", "PL1");
+        ((IStreamingNameLookup)youTube).FindByNameAsync("Artist", "Album", StreamingResultType.Release, Arg.Any<CancellationToken>())
+            .Returns([Result("Artist - Album (Full Album)", StreamingResultType.Release, link)]);
+
+        var results = await RunAsync(AlbumRequest(), youTube);
+
+        results.Single().Outcome.Should().Be(LookupOutcome.NameMatch);
+        results.Single().Links.Should().Equal(link);
+        await youTube.DidNotReceiveWithAnyArgs().LookupAsync(default!, default);
+        await youTube.DidNotReceiveWithAnyArgs().SearchAsync(default!, default, default);
+    }
+
+    [Fact]
+    public async Task EnrichAsync_ProviderFoundByNameOnly_IsNotSearchedWhenTheItemAlreadyHasALinkThere()
+    {
+        var youTube = NewNameLookupProvider("youtube");
+        var existing = Link("youtube", "from-search-row");
+
+        var results = await RunAsync(AlbumRequest(existing: existing), youTube);
+
+        results.Single().Outcome.Should().Be(LookupOutcome.NameMatch);
+        results.Single().Links.Should().Equal(existing);
+        await ((IStreamingNameLookup)youTube).DidNotReceiveWithAnyArgs().FindByNameAsync(default!, default!, default, default);
+    }
+
+    [Fact]
+    public async Task EnrichAsync_ProviderFoundByNameOnly_NothingMatches_IsNotFound()
+    {
+        var youTube = NewNameLookupProvider("youtube");
+        ((IStreamingNameLookup)youTube).FindByNameAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<StreamingResultType>(), Arg.Any<CancellationToken>())
+            .Returns([]);
+
+        var results = await RunAsync(AlbumRequest(), youTube);
+
+        results.Single().Outcome.Should().Be(LookupOutcome.NotFound);
+    }
+
+    [Fact]
+    public async Task EnrichAsync_ProviderFoundByNameOnly_SearchFails_IsFailed()
+    {
+        var youTube = NewNameLookupProvider("youtube");
+        ((IStreamingNameLookup)youTube).FindByNameAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<StreamingResultType>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(new StreamingProviderException("quota", new InvalidOperationException()));
+
+        var results = await RunAsync(AlbumRequest(), youTube);
+
+        results.Single().Outcome.Should().Be(LookupOutcome.Failed);
+    }
+
     [Fact]
     public async Task EnrichAsync_InvalidBarcode_CountsAsNoKey()
     {

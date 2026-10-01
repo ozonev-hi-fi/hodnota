@@ -29,26 +29,19 @@ public sealed class TidalStreamingProvider(TidalApiClient apiClient) : IStreamin
     {
         var isTrack = key.Type == StreamingResultType.Track;
 
-        foreach (var code in key.Codes)
-        {
-            var document = await apiClient.LookupAsync(code, key.Type, cancellationToken);
-            var included = IndexIncluded(document.Included);
+        // One request is enough: Tidal finds an album by its 12, 13 and 14 digit barcode alike
+        // (confirmed live on 2026-10-01), so the other forms are not tried.
+        var document = await apiClient.LookupAsync(key.Codes[0], key.Type, cancellationToken);
+        var included = IndexIncluded(document.Included);
 
-            List<StreamingSearchResult> matches =
-            [
-                .. (document.Data ?? [])
-                    .Where(IsUsable)
-                    .Where(resource => MatchesKey(resource, key))
-                    .Take(MaxResults)
-                    .Select(resource => isTrack ? ToTrackResult(resource, included) : ToAlbumResult(resource, included)),
-            ];
-            if (matches.Count > 0)
-            {
-                return matches;
-            }
-        }
-
-        return [];
+        return
+        [
+            .. (document.Data ?? [])
+                .Where(IsUsable)
+                .Where(resource => MatchesKey(resource, key))
+                .Take(MaxResults)
+                .Select(resource => isTrack ? ToTrackResult(resource, included) : ToAlbumResult(resource, included)),
+        ];
     }
 
     internal static bool MatchesKey(TidalResource resource, StreamingLookupKey key) => key.Type == StreamingResultType.Track

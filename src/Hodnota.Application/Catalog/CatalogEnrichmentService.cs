@@ -56,6 +56,27 @@ public sealed class CatalogEnrichmentService(IEnumerable<IStreamingProvider> pro
         return codes.Count == 0 ? null : new StreamingLookupKey(request.Type, codes);
     }
 
+    private static async Task<StreamingSearchResult?> FindByNameAsync(IStreamingProvider provider, EnrichmentRequest request, bool canSearch, CancellationToken cancellationToken)
+    {
+        IEnumerable<StreamingSearchResult> found;
+        if (provider is IStreamingNameLookup byName)
+        {
+            found = await byName.FindByNameAsync(request.ArtistName, request.Name, request.Type, cancellationToken);
+        }
+        else if (canSearch)
+        {
+            var wanted = SearchResultKey.Build(new StreamingSearchResult(request.Type, request.Name, request.ArtistName, null, []));
+            found = (await provider.SearchAsync($"{request.ArtistName} {request.Name}", request.Type, cancellationToken))
+                .Where(result => SearchResultKey.Build(result) == wanted);
+        }
+        else
+        {
+            return null;
+        }
+
+        return found.FirstOrDefault(result => result.Type == request.Type && result.Links.Count > 0);
+    }
+
     private async Task<ProviderEnrichment> CheckAsync(IStreamingProvider provider, EnrichmentRequest request, StreamingLookupKey? key, CancellationToken cancellationToken)
     {
         var existing = request.ExistingLinks.Where(link => provider.LinkPlatformCodes.Contains(link.PlatformCode)).ToList();
@@ -76,11 +97,10 @@ public sealed class CatalogEnrichmentService(IEnumerable<IStreamingProvider> pro
                     return Result(LookupOutcome.ExactMatch, match.Links);
                 }
             }
-            else if (existing.Count == 0 && key is null && canAskAgain)
+            else if (existing.Count == 0)
             {
-                var wanted = SearchResultKey.Build(new StreamingSearchResult(request.Type, request.Name, request.ArtistName, null, []));
-                var found = await provider.SearchAsync($"{request.ArtistName} {request.Name}", request.Type, cancellationToken);
-                var match = found.FirstOrDefault(result => result.Type == request.Type && result.Links.Count > 0 && SearchResultKey.Build(result) == wanted);
+                // Nothing to keep and no code to ask with: find the item by its artist and title.
+                var match = await FindByNameAsync(provider, request, canAskAgain, cancellationToken);
                 if (match is not null)
                 {
                     return Result(LookupOutcome.NameMatch, match.Links);

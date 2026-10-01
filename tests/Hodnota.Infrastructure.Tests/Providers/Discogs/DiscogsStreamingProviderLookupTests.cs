@@ -101,7 +101,6 @@ public class DiscogsStreamingProviderLookupTests
     {
         var (provider, handler) = NewProvider();
         handler.Enqueue(Ok(Release(20, 10, "5099902988085")));
-        handler.Enqueue(Ok());
 
         var results = await provider.LookupAsync(Key("724385522925", "0724385522925"), CancellationToken.None);
 
@@ -109,16 +108,26 @@ public class DiscogsStreamingProviderLookupTests
     }
 
     [Fact]
-    public async Task LookupAsync_NothingForTheFirstFormTriesTheSecondForm()
+    public async Task LookupAsync_NothingFound_AsksOnlyOnce()
     {
         var (provider, handler) = NewProvider();
         handler.Enqueue(Ok());
+
+        var results = await provider.LookupAsync(Key("724385522925", "0724385522925"), CancellationToken.None);
+
+        results.Should().BeEmpty();
+        handler.Requests.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task LookupAsync_ReleaseStoredWithTheOtherBarcodeForm_StillMatches()
+    {
+        var (provider, handler) = NewProvider();
         handler.Enqueue(Ok(Release(20, 10, "0724385522925")));
 
         var results = await provider.LookupAsync(Key("724385522925", "0724385522925"), CancellationToken.None);
 
         results.Should().ContainSingle();
-        QueryHelpers.ParseQuery(handler.Requests[1].RequestUri!.Query)["barcode"].ToString().Should().Be("0724385522925");
     }
 
     [Fact]
