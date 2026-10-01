@@ -82,6 +82,7 @@ public sealed class EfCatalogRepository(ApplicationDbContext dbContext, TimeProv
     public async Task<SharePageResult?> GetSharePageAsync(Guid id, CancellationToken cancellationToken)
     {
         var sharePage = await dbContext.SharePages
+            .AsNoTracking()
             .Include(sp => sp.Links.Where(l => l.IsVisible).OrderBy(l => l.DisplayOrder))
             .ThenInclude(l => l.ProviderLink)
             .ThenInclude(pl => pl.Platform)
@@ -109,6 +110,9 @@ public sealed class EfCatalogRepository(ApplicationDbContext dbContext, TimeProv
             [.. sharePage.Links.Select(l => new SharePageLinkResult(l.ProviderLink.Platform.Code, l.ProviderLink.ExternalUrl, l.ProviderLink.Platform.Type))]);
     }
 
+    public Task<bool> SharePageExistsAsync(Guid id, CancellationToken cancellationToken) =>
+        dbContext.SharePages.AsNoTracking().AnyAsync(sp => sp.Id == id, cancellationToken);
+
     public async Task<IReadOnlyList<PlatformCheckResult>> GetPlatformChecksAsync(Guid sharePageId, CancellationToken cancellationToken)
     {
         var target = await FindTargetAsync(sharePageId, cancellationToken);
@@ -118,15 +122,11 @@ public sealed class EfCatalogRepository(ApplicationDbContext dbContext, TimeProv
         }
 
         var (trackId, releaseId) = target.Value;
-        var checks = await dbContext.ProviderChecks.Include(pc => pc.Platform)
+        var checks = await dbContext.ProviderChecks.AsNoTracking().Include(pc => pc.Platform)
             .Where(pc => pc.TrackId == trackId && pc.ReleaseId == releaseId)
             .ToListAsync(cancellationToken);
-        var links = await FetchProviderLinksAsync(trackId, releaseId, cancellationToken);
 
-        return [.. checks.Select(check => new PlatformCheckResult(
-            check.Platform.Code,
-            check.Outcome,
-            links.FirstOrDefault(link => link.PlatformId == check.PlatformId)?.ExternalUrl))];
+        return [.. checks.Select(check => new PlatformCheckResult(check.Platform.Code, check.Outcome))];
     }
 
     public async Task<IReadOnlyDictionary<string, PlatformType>> GetPlatformTypesAsync(IReadOnlyCollection<string> platformCodes, CancellationToken cancellationToken) =>
@@ -167,6 +167,9 @@ public sealed class EfCatalogRepository(ApplicationDbContext dbContext, TimeProv
 
         var (trackId, releaseId) = target.Value;
         var now = _clock.GetUtcNow();
+        // A kept search-row link (Confirmed == false) is not re-verified by this check, so its
+        // LastVerifiedUtc must not move — only a provider that actually answered just now sets it.
+        DateTimeOffset? verifiedAt = enrichment.Confirmed ? now : null;
 
         var codes = enrichment.PlatformCodes.Concat(enrichment.Links.Select(l => l.PlatformCode)).Distinct().ToList();
         var platformsByCode = await dbContext.Platforms.Where(p => codes.Contains(p.Code)).ToDictionaryAsync(p => p.Code, cancellationToken);
@@ -176,55 +179,82 @@ public sealed class EfCatalogRepository(ApplicationDbContext dbContext, TimeProv
 
         if (enrichment.Outcome is LookupOutcome.ExactMatch or LookupOutcome.NameMatch)
         {
-            // One link per platform: a second candidate for the same platform would break the unique index.
-            foreach (var candidate in enrichment.Links.DistinctBy(link => link.PlatformCode))
-            {
-                var platform = GetPlatform(platformsByCode, candidate.PlatformCode);
-                var current = entityLinks.FirstOrDefault(link => link.PlatformId == platform.Id);
-                var isExact = enrichment.Outcome == LookupOutcome.ExactMatch;
+            var isExact = enrichment.Outcome == LookupOutcome.ExactMatch;
 
-                if (current is null)
+            // Candidates for one platform are tried in the provider's own preference order (e.g. a
+            // Discogs master, then its release); the first one not already linked to a different
+            // catalog entity is kept. One link per platform (unique index), so only one can win.
+            foreach (var group in enrichment.Links.GroupBy(link => link.PlatformCode))
+            {
+                var platform = GetPlatform(platformsByCode, group.Key);
+                var current = entityLinks.FirstOrDefault(link => link.PlatformId == platform.Id);
+                var matched = false;
+
+                foreach (var candidate in group)
                 {
-                    if (await IsProviderLinkTakenAsync(platform.Id, candidate.ExternalId, cancellationToken))
+                    if (current is not null && current.ExternalId == candidate.ExternalId)
                     {
-                        // The same platform item is already linked to a different catalog entity.
-                        outcomes[candidate.PlatformCode] = LookupOutcome.NotFound;
+                        current.Confidence = isExact ? ExactMatchConfidence : current.Confidence ?? NameMatchConfidence;
+                        if (verifiedAt is not null)
+                        {
+                            current.LastVerifiedUtc = verifiedAt;
+                        }
+
+                        matched = true;
+                        break;
+                    }
+
+                    if (current is null)
+                    {
+                        if (await IsProviderLinkTakenAsync(platform.Id, candidate.ExternalId, cancellationToken))
+                        {
+                            continue;
+                        }
+
+                        current = new ProviderLink
+                        {
+                            TrackId = trackId,
+                            ReleaseId = releaseId,
+                            Platform = platform,
+                            ExternalId = candidate.ExternalId,
+                            ExternalUrl = candidate.ExternalUrl,
+                            Confidence = isExact ? ExactMatchConfidence : NameMatchConfidence,
+                            LastVerifiedUtc = verifiedAt,
+                        };
+                        newLinks.Add(current);
+                        matched = true;
+                        break;
+                    }
+
+                    if (!isExact)
+                    {
+                        // A name match never overwrites a different existing link — only a fresh
+                        // exact match can; try the next candidate for one that matches current instead.
                         continue;
                     }
 
-                    newLinks.Add(new ProviderLink
-                    {
-                        TrackId = trackId,
-                        ReleaseId = releaseId,
-                        Platform = platform,
-                        ExternalId = candidate.ExternalId,
-                        ExternalUrl = candidate.ExternalUrl,
-                        Confidence = isExact ? ExactMatchConfidence : NameMatchConfidence,
-                        LastVerifiedUtc = now,
-                    });
-                }
-                else if (current.ExternalId == candidate.ExternalId)
-                {
-                    current.Confidence = isExact ? ExactMatchConfidence : current.Confidence ?? NameMatchConfidence;
-                    current.LastVerifiedUtc = now;
-                }
-                else if (isExact)
-                {
                     if (await IsProviderLinkTakenAsync(platform.Id, candidate.ExternalId, cancellationToken))
                     {
-                        outcomes[candidate.PlatformCode] = LookupOutcome.NameMatch;
                         continue;
                     }
 
                     current.ExternalId = candidate.ExternalId;
                     current.ExternalUrl = candidate.ExternalUrl;
                     current.Confidence = ExactMatchConfidence;
-                    current.LastVerifiedUtc = now;
+                    if (verifiedAt is not null)
+                    {
+                        current.LastVerifiedUtc = verifiedAt;
+                    }
+
+                    matched = true;
+                    break;
                 }
-                else
-                {
-                    outcomes[candidate.PlatformCode] = LookupOutcome.NameMatch;
-                }
+
+                // Not matched: every candidate was either someone else's link (isExact) or not worth
+                // overwriting current with (!isExact) — the entity keeps whatever it already had.
+                outcomes[platform.Code] = matched ? enrichment.Outcome
+                    : current is not null ? LookupOutcome.NameMatch
+                    : LookupOutcome.NotFound;
             }
         }
 
@@ -274,11 +304,7 @@ public sealed class EfCatalogRepository(ApplicationDbContext dbContext, TimeProv
             throw;
         }
 
-        var linksAfter = entityLinks.Concat(newLinks).ToList();
-        return [.. outcomes.Select(pair => new PlatformCheckResult(
-            pair.Key,
-            pair.Value,
-            linksAfter.FirstOrDefault(link => link.PlatformId == platformsByCode[pair.Key].Id)?.ExternalUrl))];
+        return [.. outcomes.Select(pair => new PlatformCheckResult(pair.Key, pair.Value))];
     }
 
     private async Task<(Guid? TrackId, Guid? ReleaseId)?> FindTargetAsync(Guid sharePageId, CancellationToken cancellationToken)

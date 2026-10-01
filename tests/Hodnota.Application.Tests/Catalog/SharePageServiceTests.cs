@@ -38,7 +38,7 @@ public class SharePageServiceTests
         return provider;
     }
 
-    private static PlatformCheckResult Check(string platformCode, LookupOutcome outcome, Uri? url = null) => new(platformCode, outcome, url);
+    private static PlatformCheckResult Check(string platformCode, LookupOutcome outcome) => new(platformCode, outcome);
 
     private sealed class Fixture
     {
@@ -114,7 +114,7 @@ public class SharePageServiceTests
     {
         var fixture = new Fixture(
             Page(PageLink("qobuz", QobuzUrl), PageLink("tidal", TidalUrl)),
-            [Check("qobuz", LookupOutcome.ExactMatch, QobuzUrl), Check("tidal", LookupOutcome.NotFound)],
+            [Check("qobuz", LookupOutcome.ExactMatch), Check("tidal", LookupOutcome.NotFound)],
             NewProvider("qobuz"),
             NewProvider("tidal"));
 
@@ -129,7 +129,7 @@ public class SharePageServiceTests
     {
         var fixture = new Fixture(
             Page(),
-            [Check("qobuz", LookupOutcome.ExactMatch, QobuzUrl), Check("tidal", LookupOutcome.Failed)],
+            [Check("qobuz", LookupOutcome.ExactMatch), Check("tidal", LookupOutcome.Failed)],
             NewProvider("qobuz"),
             NewProvider("tidal"));
 
@@ -143,7 +143,7 @@ public class SharePageServiceTests
     {
         var fixture = new Fixture(
             Page(),
-            [Check("qobuz", LookupOutcome.ExactMatch, QobuzUrl)],
+            [Check("qobuz", LookupOutcome.ExactMatch)],
             NewProvider("qobuz"),
             NewProvider("tidal"));
 
@@ -157,7 +157,7 @@ public class SharePageServiceTests
     {
         var fixture = new Fixture(
             Page(),
-            [Check("qobuz", LookupOutcome.ExactMatch, QobuzUrl), Check("tidal", LookupOutcome.Failed)],
+            [Check("qobuz", LookupOutcome.ExactMatch), Check("tidal", LookupOutcome.Failed)],
             NewProvider("qobuz"),
             NewProvider("tidal"));
         fixture.Queue.IsActive(PageId, "tidal").Returns(true);
@@ -177,7 +177,10 @@ public class SharePageServiceTests
             NewProvider("qobuz"),
             NewProvider("tidal"));
         fixture.Queue.IsActive(PageId, "tidal").Returns(true);
-        fixture.Hub.Publish(PageId, [Check("tidal", LookupOutcome.ExactMatch, TidalUrl)]);
+        // The save that produced this result also added the link to the page, which is why a live
+        // update re-reads the page instead of trusting a URL carried on the result itself (ADR 0014).
+        fixture.Repository.GetSharePageAsync(PageId, Arg.Any<CancellationToken>()).Returns(Page(), Page(PageLink("tidal", TidalUrl)));
+        fixture.Hub.Publish(PageId, [Check("tidal", LookupOutcome.ExactMatch)]);
 
         var events = await fixture.Service.WatchAsync(PageId, CancellationToken.None).ToListAsync();
 
@@ -192,15 +195,29 @@ public class SharePageServiceTests
     {
         var fixture = new Fixture(
             Page(PageLink("qobuz", QobuzUrl)),
-            [Check("qobuz", LookupOutcome.ExactMatch, QobuzUrl)],
+            [Check("qobuz", LookupOutcome.ExactMatch)],
             NewProvider("qobuz"),
             NewProvider("tidal"));
-        fixture.Hub.Publish(PageId, [Check("qobuz", LookupOutcome.ExactMatch, QobuzUrl)]);
+        fixture.Hub.Publish(PageId, [Check("qobuz", LookupOutcome.ExactMatch)]);
         fixture.Hub.Publish(PageId, [Check("tidal", LookupOutcome.NotFound)]);
 
         var events = await fixture.Service.WatchAsync(PageId, CancellationToken.None).ToListAsync();
 
         events.OfType<PlatformRowEvent>().Select(e => e.Row.PlatformCode).Should().Equal("qobuz", "tidal");
+        events[^1].Should().BeOfType<CompleteEvent>();
+    }
+
+    // Same rule as GetAsync_FoundResultWhoseLinkIsHiddenOnThePage_ShowsAsNotFound, for the live path:
+    // a result is shown only through the page's own, filtered links, never through the raw check.
+    [Fact]
+    public async Task WatchAsync_ResultForALinkHiddenOnThePage_ShowsAsNotFound()
+    {
+        var fixture = new Fixture(Page(), [], NewProvider("qobuz"));
+        fixture.Hub.Publish(PageId, [Check("qobuz", LookupOutcome.ExactMatch)]);
+
+        var events = await fixture.Service.WatchAsync(PageId, CancellationToken.None).ToListAsync();
+
+        events.OfType<PlatformRowEvent>().Single().Row.Should().Be(new PlatformRow("qobuz", PlatformType.StreamingService, PlatformRowState.NotFound, null));
         events[^1].Should().BeOfType<CompleteEvent>();
     }
 
@@ -211,8 +228,8 @@ public class SharePageServiceTests
         var fixture = new Fixture(
             Page(PageLink("qobuz", QobuzUrl), PageLink("tidal", other)),
             [
-                Check("qobuz", LookupOutcome.ExactMatch, QobuzUrl),
-                Check("tidal", LookupOutcome.NameMatch, other),
+                Check("qobuz", LookupOutcome.ExactMatch),
+                Check("tidal", LookupOutcome.NameMatch),
                 Check("spotify", LookupOutcome.NotFound),
                 Check("discogs", LookupOutcome.Failed),
             ],
@@ -235,7 +252,7 @@ public class SharePageServiceTests
     [Fact]
     public async Task GetAsync_FoundResultWhoseLinkIsHiddenOnThePage_ShowsAsNotFound()
     {
-        var fixture = new Fixture(Page(), [Check("qobuz", LookupOutcome.ExactMatch, QobuzUrl)], NewProvider("qobuz"));
+        var fixture = new Fixture(Page(), [Check("qobuz", LookupOutcome.ExactMatch)], NewProvider("qobuz"));
 
         var view = await fixture.Service.GetAsync(PageId, CancellationToken.None);
 
@@ -288,7 +305,7 @@ public class SharePageServiceTests
     {
         var fixture = new Fixture(
             Page(PageLink("qobuz", QobuzUrl)),
-            [Check("qobuz", LookupOutcome.ExactMatch, QobuzUrl), Check("tidal", LookupOutcome.NotFound)],
+            [Check("qobuz", LookupOutcome.ExactMatch), Check("tidal", LookupOutcome.NotFound)],
             NewProvider("qobuz"),
             NewProvider("tidal"));
 
@@ -311,7 +328,8 @@ public class SharePageServiceTests
             NewProvider("qobuz"),
             NewProvider("tidal"),
             NewProvider("spotify"));
-        fixture.Hub.Publish(PageId, [Check("tidal", LookupOutcome.ExactMatch, TidalUrl)]);
+        fixture.Repository.GetSharePageAsync(PageId, Arg.Any<CancellationToken>()).Returns(Page(), Page(PageLink("tidal", TidalUrl)));
+        fixture.Hub.Publish(PageId, [Check("tidal", LookupOutcome.ExactMatch)]);
         fixture.Hub.Publish(PageId, [Check("spotify", LookupOutcome.NotFound)]);
 
         var events = await fixture.Service.WatchAsync(PageId, CancellationToken.None).ToListAsync();

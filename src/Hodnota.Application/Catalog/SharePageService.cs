@@ -11,7 +11,6 @@ public sealed class SharePageService(
     IEnrichmentQueue queue,
     IShareEventHub events)
 {
-    // A watched page whose checks never finish (a crash mid-job) must not hold the stream open forever.
     private static readonly TimeSpan WatchTimeout = TimeSpan.FromSeconds(60);
 
     public async Task<SharePageView?> ResolveAsync(string candidateId, CancellationToken cancellationToken)
@@ -33,6 +32,8 @@ public sealed class SharePageService(
 
         return await BuildViewAsync(page, checks, cancellationToken);
     }
+
+    public Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken) => repository.SharePageExistsAsync(id, cancellationToken);
 
     public async Task<SharePageView?> GetAsync(Guid id, CancellationToken cancellationToken)
     {
@@ -90,9 +91,14 @@ public sealed class SharePageService(
         timeout.CancelAfter(WatchTimeout);
         await foreach (var update in subscription.ReadAllAsync(timeout.Token))
         {
+            // Re-read so a link a save just added is seen, and so the same "hidden link shows as not
+            // found" rule as BuildViewAsync applies here too — not the raw, unfiltered entity link.
+            page = await repository.GetSharePageAsync(id, cancellationToken) ?? page;
+            var linkUrlByCode = page.Links.ToDictionary(link => link.PlatformCode, link => link.Url);
+
             foreach (var result in update.Where(result => typesByCode.ContainsKey(result.PlatformCode)))
             {
-                var row = ToRow(result, typesByCode[result.PlatformCode], result.Url);
+                var row = ToRow(result, typesByCode[result.PlatformCode], linkUrlByCode.GetValueOrDefault(result.PlatformCode));
                 if (!sent.TryGetValue(row.PlatformCode, out var previous) || previous != row)
                 {
                     sent[row.PlatformCode] = row;

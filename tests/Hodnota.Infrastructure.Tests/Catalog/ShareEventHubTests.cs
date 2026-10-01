@@ -10,7 +10,7 @@ public class ShareEventHubTests
 {
     private static readonly Guid PageId = Guid.NewGuid();
 
-    private static IReadOnlyList<PlatformCheckResult> Result(string platformCode) => [new(platformCode, LookupOutcome.NotFound, null)];
+    private static IReadOnlyList<PlatformCheckResult> Result(string platformCode) => [new(platformCode, LookupOutcome.NotFound)];
 
     private static async Task<IReadOnlyList<PlatformCheckResult>> ReadOneAsync(IShareEventSubscription subscription)
     {

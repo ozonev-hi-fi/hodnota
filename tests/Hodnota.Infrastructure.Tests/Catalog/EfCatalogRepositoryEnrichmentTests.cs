@@ -6,6 +6,7 @@ using Hodnota.Infrastructure.Catalog;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Hodnota.Infrastructure.Tests.Catalog;
 
@@ -33,7 +34,7 @@ public class EfCatalogRepositoryEnrichmentTests
         Isrc: "USRC17607839");
 
     private static ProviderEnrichment Enrichment(string providerCode, LookupOutcome outcome, params ProviderLinkCandidate[] links) =>
-        new(providerCode, [providerCode], outcome, links);
+        new(providerCode, [providerCode], outcome, links, Confirmed: true);
 
     [Fact]
     public async Task GetEnrichmentRequestAsync_ForATrackPage_ReturnsTitleArtistIsrcAndStoredLinks()
@@ -99,7 +100,6 @@ public class EfCatalogRepositoryEnrichmentTests
         saved.Should().ContainSingle();
         saved[0].PlatformCode.Should().Be(PlatformCodes.Tidal);
         saved[0].Outcome.Should().Be(LookupOutcome.ExactMatch);
-        saved[0].Url.Should().Be(new Uri("https://example.com/tidal/t-1"));
         var tidalLink = await context.ProviderLinks.Include(pl => pl.Platform).SingleAsync(pl => pl.Platform.Code == PlatformCodes.Tidal);
         tidalLink.Confidence.Should().Be(1.0);
         tidalLink.LastVerifiedUtc.Should().NotBeNull();
@@ -187,7 +187,6 @@ public class EfCatalogRepositoryEnrichmentTests
         var saved = await repository.SaveEnrichmentAsync(page.Id, Enrichment(ProviderCodes.Tidal, outcome), CancellationToken.None);
 
         saved.Single().Outcome.Should().Be(outcome);
-        saved.Single().Url.Should().BeNull();
         (await context.ProviderLinks.CountAsync()).Should().Be(1);
         (await context.ProviderChecks.Select(c => c.Outcome).SingleAsync()).Should().Be(outcome);
     }
@@ -226,6 +225,78 @@ public class EfCatalogRepositoryEnrichmentTests
 
         saved.Single().Outcome.Should().Be(LookupOutcome.NotFound);
         (await context.ProviderLinks.CountAsync()).Should().Be(2);
+    }
+
+    [Fact]
+    public async Task SaveEnrichmentAsync_FirstCandidateTakenByAnotherEntity_SavesTheNextFreeOne()
+    {
+        var (connection, context) = await CreateContextAsync();
+        await using var _ = connection;
+        await using var __ = context;
+        var repository = new EfCatalogRepository(context);
+        var other = new StreamingSearchResult(
+            StreamingResultType.Track, "Enter Sandman", "Metallica", null, [Link(PlatformCodes.Tidal, "t-1")]);
+        await repository.ResolveSharePageAsync(other, CancellationToken.None);
+        var page = await repository.ResolveSharePageAsync(SpotifyTrack(), CancellationToken.None);
+
+        // t-1 (e.g. a Discogs master) is already linked to the other track; t-2 (its own release,
+        // offered as a fallback) is free.
+        var saved = await repository.SaveEnrichmentAsync(
+            page.Id,
+            Enrichment(ProviderCodes.Tidal, LookupOutcome.ExactMatch, Link(PlatformCodes.Tidal, "t-1"), Link(PlatformCodes.Tidal, "t-2")),
+            CancellationToken.None);
+
+        saved.Single().Outcome.Should().Be(LookupOutcome.ExactMatch);
+        context.ChangeTracker.Clear();
+        var reloaded = await repository.GetSharePageAsync(page.Id, CancellationToken.None);
+        reloaded!.Links.Should().Contain(l => l.PlatformCode == PlatformCodes.Tidal && l.Url == new Uri("https://example.com/tidal/t-2"));
+    }
+
+    [Fact]
+    public async Task SaveEnrichmentAsync_ExactMatchCandidatesDifferFromTheCurrentLinkAndTheFirstIsTaken_ReplacesWithTheNextFreeOne()
+    {
+        var (connection, context) = await CreateContextAsync();
+        await using var _ = connection;
+        await using var __ = context;
+        var repository = new EfCatalogRepository(context);
+        var page = await repository.ResolveSharePageAsync(SpotifyTrack(), CancellationToken.None);
+        await repository.SaveEnrichmentAsync(
+            page.Id, Enrichment(ProviderCodes.Tidal, LookupOutcome.ExactMatch, Link(PlatformCodes.Tidal, "t-1")), CancellationToken.None);
+        var other = new StreamingSearchResult(
+            StreamingResultType.Track, "Enter Sandman", "Metallica", null, [Link(PlatformCodes.Tidal, "t-2")]);
+        await repository.ResolveSharePageAsync(other, CancellationToken.None);
+
+        // Neither candidate is the entity's current link (t-1); t-2 belongs to the other track, t-3 is free.
+        var saved = await repository.SaveEnrichmentAsync(
+            page.Id,
+            Enrichment(ProviderCodes.Tidal, LookupOutcome.ExactMatch, Link(PlatformCodes.Tidal, "t-2"), Link(PlatformCodes.Tidal, "t-3")),
+            CancellationToken.None);
+
+        saved.Single().Outcome.Should().Be(LookupOutcome.ExactMatch);
+        context.ChangeTracker.Clear();
+        var reloaded = await repository.GetSharePageAsync(page.Id, CancellationToken.None);
+        reloaded!.Links.Should().Contain(l => l.PlatformCode == PlatformCodes.Tidal && l.Url == new Uri("https://example.com/tidal/t-3"));
+    }
+
+    [Fact]
+    public async Task SaveEnrichmentAsync_KeptSearchRowLinkIsNotConfirmed_DoesNotUpdateLastVerifiedUtc()
+    {
+        var (connection, context) = await CreateContextAsync();
+        await using var _ = connection;
+        await using var __ = context;
+        var timeProvider = new FakeTimeProvider(DateTimeOffset.Parse("2026-01-01T00:00:00Z"));
+        var repository = new EfCatalogRepository(context, timeProvider);
+        var page = await repository.ResolveSharePageAsync(SpotifyTrack(), CancellationToken.None);
+        await repository.SaveEnrichmentAsync(
+            page.Id, Enrichment(ProviderCodes.Spotify, LookupOutcome.ExactMatch, Link(PlatformCodes.Spotify, "sp-1")), CancellationToken.None);
+        var verifiedAt = (await context.ProviderLinks.SingleAsync()).LastVerifiedUtc;
+        verifiedAt.Should().NotBeNull();
+
+        timeProvider.Advance(TimeSpan.FromDays(1));
+        var kept = new ProviderEnrichment(ProviderCodes.Spotify, [PlatformCodes.Spotify], LookupOutcome.NameMatch, [Link(PlatformCodes.Spotify, "sp-1")], Confirmed: false);
+        await repository.SaveEnrichmentAsync(page.Id, kept, CancellationToken.None);
+
+        (await context.ProviderLinks.SingleAsync()).LastVerifiedUtc.Should().Be(verifiedAt, "nothing new was confirmed, only the already-known link was kept");
     }
 
     [Fact]
@@ -280,7 +351,7 @@ public class EfCatalogRepositoryEnrichmentTests
     }
 
     [Fact]
-    public async Task GetPlatformChecksAsync_ReturnsEachCheckWithTheStoredLinkUrl()
+    public async Task GetPlatformChecksAsync_ReturnsEachCheck()
     {
         var (connection, context) = await CreateContextAsync();
         await using var _ = connection;
@@ -295,8 +366,8 @@ public class EfCatalogRepositoryEnrichmentTests
 
         checks.Should().BeEquivalentTo(
         [
-            new PlatformCheckResult(PlatformCodes.Tidal, LookupOutcome.ExactMatch, new Uri("https://example.com/tidal/t-1")),
-            new PlatformCheckResult(PlatformCodes.Qobuz, LookupOutcome.Failed, null),
+            new PlatformCheckResult(PlatformCodes.Tidal, LookupOutcome.ExactMatch),
+            new PlatformCheckResult(PlatformCodes.Qobuz, LookupOutcome.Failed),
         ]);
     }
 

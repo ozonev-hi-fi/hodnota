@@ -16,15 +16,37 @@ namespace Hodnota.Infrastructure.Tests.Providers;
 // page view and fail every time (the check cannot be saved), so a missing seed is caught here.
 public class ProviderPlatformCodesTests
 {
-    // The properties under test are plain initializers, so no dependency is used.
+    // Every IStreamingProvider in this assembly, found by reflection rather than a hand-kept list, so
+    // a new provider is covered automatically instead of depending on someone remembering to add it here.
+    private static IEnumerable<Type> ProviderTypes() =>
+        typeof(ApplicationDbContext).Assembly.GetTypes()
+            .Where(type => typeof(IStreamingProvider).IsAssignableFrom(type) && !type.IsAbstract && !type.IsInterface);
+
+    // The properties under test are plain initializers, so each constructor's arguments are never used.
     public static IEnumerable<object[]> Providers() =>
     [
-        [new DiscogsStreamingProvider(null!)],
-        [new QobuzStreamingProvider(null!)],
-        [new SpotifyStreamingProvider(null!)],
-        [new TidalStreamingProvider(null!)],
-        [new YouTubeStreamingProvider(null!)],
+        .. ProviderTypes().Select(type =>
+        {
+            var constructor = type.GetConstructors().Single();
+            var provider = (IStreamingProvider)constructor.Invoke(new object?[constructor.GetParameters().Length]);
+            return new object[] { provider };
+        }),
     ];
+
+    // Reflection finds whatever providers exist; this pins the count so a provider that was meant to
+    // implement IStreamingProvider but doesn't (a typo in the interface list) is still caught.
+    [Fact]
+    public void ProviderTypes_FindsEveryKnownProvider()
+    {
+        ProviderTypes().Select(type => type.Name).Should().BeEquivalentTo(
+        [
+            nameof(DiscogsStreamingProvider),
+            nameof(QobuzStreamingProvider),
+            nameof(SpotifyStreamingProvider),
+            nameof(TidalStreamingProvider),
+            nameof(YouTubeStreamingProvider),
+        ]);
+    }
 
     [Theory]
     [MemberData(nameof(Providers))]

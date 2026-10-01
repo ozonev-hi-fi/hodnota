@@ -8,6 +8,8 @@ using Hodnota.Application.Catalog;
 using Hodnota.Contracts.Catalog;
 using Hodnota.Infrastructure.Catalog;
 
+using Microsoft.Extensions.DependencyInjection;
+
 using RowState = Hodnota.Contracts.Catalog.PlatformRowState;
 
 namespace Hodnota.Api.Tests.Catalog;
@@ -216,10 +218,11 @@ public class CatalogEndpointsTests(CatalogApiFactory factory) : IClassFixture<Ca
         var sharePage = await response.Content.ReadFromJsonAsync<SharePageResponse>();
         sharePage!.Name.Should().Be("Nothing Else Matters");
         sharePage.Artist.Should().Be("Metallica");
-        sharePage.Links.Should().HaveCount(2);
-        sharePage.Links.Should().Contain(l => l.Platform == PlatformCodes.YouTube);
-        sharePage.Links.Should().Contain(l => l.Platform == PlatformCodes.YouTubeMusic);
-        sharePage.Links.Should().OnlyContain(l => l.Type == PlatformType.StreamingService);
+        var savedLinks = await GetSavedLinksAsync(factory, sharePage.Id);
+        savedLinks.Should().HaveCount(2);
+        savedLinks.Should().Contain(l => l.PlatformCode == PlatformCodes.YouTube);
+        savedLinks.Should().Contain(l => l.PlatformCode == PlatformCodes.YouTubeMusic);
+        savedLinks.Should().OnlyContain(l => l.PlatformType == Hodnota.Domain.Catalog.PlatformType.StreamingService);
     }
 
     [Fact]
@@ -254,10 +257,11 @@ public class CatalogEndpointsTests(CatalogApiFactory factory) : IClassFixture<Ca
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var sharePage = await response.Content.ReadFromJsonAsync<SharePageResponse>();
-        sharePage!.Links.Should().HaveCount(3);
-        sharePage.Links.Should().Contain(l => l.Platform == PlatformCodes.Spotify);
-        sharePage.Links.Should().Contain(l => l.Platform == PlatformCodes.YouTube);
-        sharePage.Links.Should().Contain(l => l.Platform == PlatformCodes.YouTubeMusic);
+        var savedLinks = await GetSavedLinksAsync(factory, sharePage!.Id);
+        savedLinks.Should().HaveCount(3);
+        savedLinks.Should().Contain(l => l.PlatformCode == PlatformCodes.Spotify);
+        savedLinks.Should().Contain(l => l.PlatformCode == PlatformCodes.YouTube);
+        savedLinks.Should().Contain(l => l.PlatformCode == PlatformCodes.YouTubeMusic);
     }
 
     [Fact]
@@ -298,10 +302,11 @@ public class CatalogEndpointsTests(CatalogApiFactory factory) : IClassFixture<Ca
         var resolveResponse = await _client.PostAsJsonAsync("/api/catalog/resolve", new ResolveRequest(secondCandidates![0].Id));
 
         var sharePage = await resolveResponse.Content.ReadFromJsonAsync<SharePageResponse>();
-        sharePage!.Links.Should().HaveCount(3);
-        sharePage.Links.Should().Contain(l => l.Platform == PlatformCodes.Spotify);
-        sharePage.Links.Should().Contain(l => l.Platform == PlatformCodes.YouTube);
-        sharePage.Links.Should().Contain(l => l.Platform == PlatformCodes.YouTubeMusic);
+        var savedLinks = await GetSavedLinksAsync(factory, sharePage!.Id);
+        savedLinks.Should().HaveCount(3);
+        savedLinks.Should().Contain(l => l.PlatformCode == PlatformCodes.Spotify);
+        savedLinks.Should().Contain(l => l.PlatformCode == PlatformCodes.YouTube);
+        savedLinks.Should().Contain(l => l.PlatformCode == PlatformCodes.YouTubeMusic);
     }
 
     [Fact]
@@ -384,7 +389,7 @@ public class CatalogEndpointsTests(CatalogApiFactory factory) : IClassFixture<Ca
         var sharePage = await response.Content.ReadFromJsonAsync<SharePageResponse>();
         sharePage!.Name.Should().Be("Master of Puppets");
         sharePage.Artist.Should().Be("Metallica");
-        sharePage.Links.Should().ContainSingle(l => l.Platform == PlatformCodes.YouTube);
+        sharePage.Platforms.Should().Contain(p => p.Platform == PlatformCodes.YouTube);
     }
 
     [Fact]
@@ -523,6 +528,16 @@ public class CatalogEndpointsTests(CatalogApiFactory factory) : IClassFixture<Ca
         var link = factory.EmailSender.LastConfirmationLink ?? throw new InvalidOperationException("No confirmation link was captured.");
         var response = await client.GetAsync(new Uri(link).PathAndQuery);
         response.EnsureSuccessStatusCode();
+    }
+
+    // The response no longer carries the saved links directly (a row is "checking" until its provider
+    // check completes), so a test that is really about what resolve persisted reads it back this way.
+    private static async Task<IReadOnlyList<SharePageLinkResult>> GetSavedLinksAsync(CatalogApiFactory factory, Guid sharePageId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<ICatalogRepository>();
+        var page = await repository.GetSharePageAsync(sharePageId, CancellationToken.None);
+        return page!.Links;
     }
 
     private sealed record AccessTokenResponse(string TokenType, string AccessToken, int ExpiresIn, string RefreshToken);

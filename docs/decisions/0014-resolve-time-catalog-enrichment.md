@@ -1,6 +1,6 @@
 # 0014. Resolve-time catalog enrichment
 
-Status: proposed
+Status: accepted
 
 ## Context
 
@@ -20,7 +20,7 @@ The roadmap also listed open questions: how long a click may wait, what to store
 
 ### The click opens the page at once; enrichment runs in the background
 
-`POST /api/catalog/resolve` creates (or finds, see below) the share page and returns at once. It does not wait for providers. The page opens with the links from the search row. A background job then asks each provider for the exact item, and the page receives each result live.
+`POST /api/catalog/resolve` creates (or finds, see below) the share page and returns at once. It does not wait for providers. The page opens at once; its rows show as checking until each provider's result arrives. A background job then asks each provider for the exact item, and the page receives each result live.
 
 **Rejected alternative:** waiting for all providers inside the click, with a spinner on the search page. A click would take as long as the slowest provider (up to the 10 s HTTP timeout), and the work would be tied to one HTTP request: a friend who opens the same link meanwhile would see nothing change.
 
@@ -80,7 +80,7 @@ The contractual Discogs and Tidal credit lines ([decisions/0012](0012-discogs-pr
 
 **When no provider has a key** (for example a YouTube-only row), each provider is searched by name, and only a result with the same normalized key is accepted, as a name match.
 
-`ProviderLink.Confidence` records the difference: `1.0` for an exact-key match and `0.5` for a name match. The database allows one link per platform per entity, so an exact-key match **replaces** a name-match link for the same platform. Several links per platform (original, remaster, …) are deferred, see "Out of scope".
+`ProviderLink.Confidence` records the difference: `1.0` for an exact-key match and `0.5` for a name match. The database allows one link per platform per entity, so an exact-key match **replaces** a name-match link for the same platform. A lookup can return several matching items (re-releases can share a code, or a Discogs master and its release); the provider lists them in preference order, and the first one not already linked to another catalog entity is saved — only when every one of them is taken does the platform stay unmatched. Several links per platform (original, remaster, …) are deferred, see "Out of scope".
 
 ### Provider lookup support
 
@@ -123,7 +123,7 @@ Share pages created before this change stay valid (their URLs are already shared
 
 ### Check results are saved
 
-Each provider check is saved per entity and platform: when it ran and whether it found an exact match, a name match, nothing, or failed. A found link also sets `ProviderLink.LastVerifiedUtc`. This costs one table, and the future scheduled refresh needs these dates to decide what to check again, including "entities never checked on a newly added provider".
+Each provider check is saved per entity and platform: when it ran and whether it found an exact match, a name match, nothing, or failed. `ProviderLink.LastVerifiedUtc` is set only when the provider returned that link in this check, not when a name match from the search row is merely kept. This costs one table, and the future scheduled refresh needs these dates to decide what to check again, including "entities never checked on a newly added provider".
 
 ### Metadata authority stays as it is
 

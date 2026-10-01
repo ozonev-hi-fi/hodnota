@@ -16,9 +16,6 @@ public sealed class QobuzStreamingProvider(QobuzApiClient apiClient) : IStreamin
 
     public bool SupportsLookup(StreamingResultType type) => true;
 
-    // Qobuz has no lookup by code. A search with the code as its text finds the item when the code is
-    // written as Qobuz stores it, so the results are checked against the code afterwards. Albums are
-    // stored with 13 digits (a 12 digit query finds nothing, confirmed live on 2026-10-01).
     public async Task<IReadOnlyList<StreamingSearchResult>> LookupAsync(StreamingLookupKey key, CancellationToken cancellationToken)
     {
         if (key.Type == StreamingResultType.Track)

@@ -21,15 +21,11 @@ public sealed class YouTubeStreamingProvider(YouTubeService youTubeService) : IS
 
     public bool Supports(StreamingResultType type) => true;
 
-    // YouTube has no ISRC/UPC lookup. Enrichment finds an item there by name instead (FindByNameAsync).
     public bool SupportsLookup(StreamingResultType type) => false;
 
     public Task<IReadOnlyList<StreamingSearchResult>> LookupAsync(StreamingLookupKey key, CancellationToken cancellationToken) =>
         throw new NotSupportedException();
 
-    // One search call per item, and only when the item has no YouTube link yet: a search costs from a
-    // small daily quota. The query is the item's own artist and title, not the user's typed text, and a
-    // result is accepted only when it proves the artist and the exact title (SearchResultNameMatcher).
     public async Task<IReadOnlyList<StreamingSearchResult>> FindByNameAsync(string artistName, string name, StreamingResultType type, CancellationToken cancellationToken)
     {
         var results = await SearchAsync($"{artistName} {name}", type, cancellationToken);

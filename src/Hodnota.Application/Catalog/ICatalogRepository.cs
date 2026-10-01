@@ -10,6 +10,9 @@ public interface ICatalogRepository
 
     Task<SharePageResult?> GetSharePageAsync(Guid id, CancellationToken cancellationToken);
 
+    // Cheap existence check for callers (the event stream) that only need to 404 early, not the full view.
+    Task<bool> SharePageExistsAsync(Guid id, CancellationToken cancellationToken);
+
     Task<IReadOnlyList<PlatformCheckResult>> GetPlatformChecksAsync(Guid sharePageId, CancellationToken cancellationToken);
 
     Task<IReadOnlyDictionary<string, PlatformType>> GetPlatformTypesAsync(IReadOnlyCollection<string> platformCodes, CancellationToken cancellationToken);

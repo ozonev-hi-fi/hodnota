@@ -30,20 +30,15 @@ public sealed partial class DiscogsStreamingProvider(DiscogsApiClient apiClient)
             return [];
         }
 
-        // One request: the 12 and 13 digit forms of a barcode find the same releases (confirmed live
-        // on 2026-10-01), and Discogs allows only 60 requests a minute for all users together.
         var response = await apiClient.LookupByBarcodeAsync(key.Codes[0], cancellationToken);
 
-        // Masters first: a master stands for every pressing of the album.
-        return
-        [
-            .. (response.Results ?? [])
-                .Where(result => result.Id.HasValue && !string.IsNullOrWhiteSpace(result.Title) && result.Type == ReleaseResultType)
-                .Where(result => HasBarcode(result, key))
-                .OrderBy(result => HasMaster(result) ? 0 : 1)
-                .Take(MaxResults)
-                .Select(ToLookupResult),
-        ];
+        var matches = (response.Results ?? [])
+            .Where(result => result.Id.HasValue && !string.IsNullOrWhiteSpace(result.Title) && result.Type == ReleaseResultType)
+            .Where(result => HasBarcode(result, key))
+            .OrderBy(result => HasMaster(result) ? 0 : 1)
+            .Take(MaxResults);
+
+        return [.. matches.SelectMany(ToLookupResults)];
     }
 
     // Barcodes are typed in as printed, with spaces and dashes, next to non-barcode text.
@@ -52,13 +47,21 @@ public sealed partial class DiscogsStreamingProvider(DiscogsApiClient apiClient)
 
     internal static bool HasMaster(DiscogsSearchResult result) => result.MasterId is > 0;
 
-    internal static StreamingSearchResult ToLookupResult(DiscogsSearchResult result)
+    // A master link first (it stands for every pressing of the album), then the release's own link
+    // right after it: a caller takes the first candidate not already linked to another catalog entity,
+    // so the release serves as the fallback when the master is taken.
+    internal static IEnumerable<StreamingSearchResult> ToLookupResults(DiscogsSearchResult result)
     {
-        if (!HasMaster(result))
+        if (HasMaster(result))
         {
-            return ToSearchResult(result);
+            yield return ToMasterResult(result);
         }
 
+        yield return ToSearchResult(result);
+    }
+
+    internal static StreamingSearchResult ToMasterResult(DiscogsSearchResult result)
+    {
         var masterId = result.MasterId!.Value;
         var (artistName, name) = SplitTitle(result.Title!);
 

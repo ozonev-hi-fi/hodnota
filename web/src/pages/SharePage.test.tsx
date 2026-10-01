@@ -44,7 +44,6 @@ function page(
     type: 'Song',
     name: 'Nothing Else Matters',
     artist: 'Metallica',
-    links: [],
     platforms,
     isComplete: !platforms.some((p) => p.state === 'Checking'),
     ...overrides,

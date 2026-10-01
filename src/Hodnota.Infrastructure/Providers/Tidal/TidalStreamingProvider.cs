@@ -28,9 +28,6 @@ public sealed class TidalStreamingProvider(TidalApiClient apiClient) : IStreamin
     public async Task<IReadOnlyList<StreamingSearchResult>> LookupAsync(StreamingLookupKey key, CancellationToken cancellationToken)
     {
         var isTrack = key.Type == StreamingResultType.Track;
-
-        // One request is enough: Tidal finds an album by its 12, 13 and 14 digit barcode alike
-        // (confirmed live on 2026-10-01), so the other forms are not tried.
         var document = await apiClient.LookupAsync(key.Codes[0], key.Type, cancellationToken);
         var included = IndexIncluded(document.Included);
 

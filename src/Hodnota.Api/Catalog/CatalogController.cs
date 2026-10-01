@@ -1,9 +1,12 @@
+using System.Net.ServerSentEvents;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 
 using Hodnota.Application.Catalog;
 using Hodnota.Contracts.Catalog;
 
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 
@@ -56,36 +59,25 @@ public sealed class CatalogController(
     [HttpGet("sharepages/{id:guid}/events")]
     [AllowAnonymous]
     [Produces("text/event-stream")]
-    public async Task<IActionResult> WatchSharePage(Guid id, CancellationToken cancellationToken)
+    public async Task<IResult> WatchSharePage(Guid id, CancellationToken cancellationToken)
     {
-        if (await sharePageService.GetAsync(id, cancellationToken) is null)
-        {
-            return NotFound();
-        }
+        return !await sharePageService.ExistsAsync(id, cancellationToken)
+            ? TypedResults.NotFound()
+            : TypedResults.ServerSentEvents(ToSseItems(sharePageService.WatchAsync(id, cancellationToken), jsonOptions.Value.JsonSerializerOptions, cancellationToken));
+    }
 
-        Response.Headers.ContentType = "text/event-stream";
-        Response.Headers.CacheControl = "no-cache";
-        await Response.StartAsync(cancellationToken);
-
-        try
+    private static async IAsyncEnumerable<SseItem<string>> ToSseItems(
+        IAsyncEnumerable<SharePageEvent> events,
+        JsonSerializerOptions jsonSerializerOptions,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        await foreach (var sharePageEvent in events.WithCancellation(cancellationToken))
         {
-            await foreach (var sharePageEvent in sharePageService.WatchAsync(id, cancellationToken))
+            yield return sharePageEvent switch
             {
-                var (name, data) = sharePageEvent switch
-                {
-                    PlatformRowEvent platform => ("platform", JsonSerializer.Serialize(platform.Row.ToResponse(), jsonOptions.Value.JsonSerializerOptions)),
-                    _ => ("complete", "{}"),
-                };
-
-                await Response.WriteAsync($"event: {name}\ndata: {data}\n\n", cancellationToken);
-                await Response.Body.FlushAsync(cancellationToken);
-            }
+                PlatformRowEvent platform => new SseItem<string>(JsonSerializer.Serialize(platform.Row.ToResponse(), jsonSerializerOptions), "platform"),
+                _ => new SseItem<string>("{}", "complete"),
+            };
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            // The viewer closed the page.
-        }
-
-        return new EmptyResult();
     }
 }

@@ -667,19 +667,12 @@ export interface components {
             search: string;
             type: components["schemas"]["CandidateType"];
         };
-        SharePageLinkResponse: {
-            platform: string;
-            /** Format: uri */
-            url: string;
-            type: components["schemas"]["PlatformType"];
-        };
         SharePageResponse: {
             /** Format: uuid */
             id: string;
             type: components["schemas"]["CandidateType"];
             name: string;
             artist: string;
-            links: components["schemas"]["SharePageLinkResponse"][];
             platforms: components["schemas"]["PlatformRowResponse"][];
             isComplete: boolean;
         };

@@ -55,12 +55,15 @@ public class DiscogsStreamingProviderLookupTests
 
         var results = await provider.LookupAsync(Key("724385522925", "0724385522925"), CancellationToken.None);
 
-        var result = results.Should().ContainSingle().Subject;
-        result.Name.Should().Be("OK Computer");
-        result.ArtistName.Should().Be("Radiohead");
-        result.ReleaseType.Should().Be(ReleaseType.Album);
-        result.Upc.Should().BeNull("Discogs barcodes are user-typed and never become a UPC");
-        result.Links.Single().Should().Be(new ProviderLinkCandidate(PlatformCodes.Discogs, "master:10", new Uri("https://www.discogs.com/master/10")));
+        results.Should().HaveCount(2, "the release itself is kept as a fallback candidate for when the master is already linked elsewhere");
+        var master = results[0];
+        master.Name.Should().Be("OK Computer");
+        master.ArtistName.Should().Be("Radiohead");
+        master.ReleaseType.Should().Be(ReleaseType.Album);
+        master.Upc.Should().BeNull("Discogs barcodes are user-typed and never become a UPC");
+        master.Links.Single().Should().Be(new ProviderLinkCandidate(PlatformCodes.Discogs, "master:10", new Uri("https://www.discogs.com/master/10")));
+
+        results[1].Links.Single().Should().Be(new ProviderLinkCandidate(PlatformCodes.Discogs, "release:20", new Uri("https://www.discogs.com/release/20")));
     }
 
     [Fact]
@@ -89,7 +92,7 @@ public class DiscogsStreamingProviderLookupTests
     public async Task LookupAsync_BarcodeTypedWithSpacesAndDashes_StillMatches()
     {
         var (provider, handler) = NewProvider();
-        handler.Enqueue(Ok(Release(20, 10, "Matrix: A1", "7 24385-52292 5")));
+        handler.Enqueue(Ok(Release(20, masterId: null, "Matrix: A1", "7 24385-52292 5")));
 
         var results = await provider.LookupAsync(Key("724385522925", "0724385522925"), CancellationToken.None);
 
@@ -123,7 +126,7 @@ public class DiscogsStreamingProviderLookupTests
     public async Task LookupAsync_ReleaseStoredWithTheOtherBarcodeForm_StillMatches()
     {
         var (provider, handler) = NewProvider();
-        handler.Enqueue(Ok(Release(20, 10, "0724385522925")));
+        handler.Enqueue(Ok(Release(20, masterId: null, "0724385522925")));
 
         var results = await provider.LookupAsync(Key("724385522925", "0724385522925"), CancellationToken.None);
 

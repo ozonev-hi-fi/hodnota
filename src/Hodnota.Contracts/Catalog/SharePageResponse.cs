@@ -22,8 +22,6 @@ public enum PlatformRowState
     Failed,
 }
 
-public sealed record SharePageLinkResponse(string Platform, Uri Url, PlatformType Type);
-
 public sealed record PlatformRowResponse(string Platform, PlatformType Type, PlatformRowState State, Uri? Url);
 
 public sealed record SharePageResponse(
@@ -31,6 +29,5 @@ public sealed record SharePageResponse(
     CandidateType Type,
     string Name,
     string Artist,
-    IReadOnlyList<SharePageLinkResponse> Links,
     IReadOnlyList<PlatformRowResponse> Platforms,
     bool IsComplete);

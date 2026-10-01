@@ -83,7 +83,7 @@ It is also against the rules:
 - **III.E.6:** an API client must not "scrape YouTube Applications". Because hodnota already holds a Data API key, this rule applies to the **same project**. The risk is losing the key and the quota, not only the InnerTube access.
 - **YouTube Terms of Service:** no access by "automated means (such as robots, botnets or scrapers)" without written permission.
 
-Plain risk statement: for a private hobby project the likely penalty is a banned key, not a lawsuit. But Qobuz already carries a documented ToS risk in this project, so a second one makes any later public launch harder. Research recommendation: never ship InnerTube to real users. This is decision D3 (section 11). It is the owner's to make.
+Plain risk statement: for a private hobby project the likely penalty is a banned key, not a lawsuit. Any ToS risk also makes a later public launch harder. Research recommendation: never ship InnerTube to real users. This is decision D3 (section 11). It is the owner's to make.
 
 Other tools: Odesli/song.link closed its public API on 2026-07-31. MusicBrainz Harmony has no YouTube Music provider. How Songwhip and Soundiiz match is not public.
 

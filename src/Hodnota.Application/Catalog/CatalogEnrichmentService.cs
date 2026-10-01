@@ -56,7 +56,7 @@ public sealed class CatalogEnrichmentService(IEnumerable<IStreamingProvider> pro
         return codes.Count == 0 ? null : new StreamingLookupKey(request.Type, codes);
     }
 
-    private static async Task<StreamingSearchResult?> FindByNameAsync(IStreamingProvider provider, EnrichmentRequest request, bool canSearch, CancellationToken cancellationToken)
+    private static async Task<IReadOnlyList<StreamingSearchResult>> FindByNameAsync(IStreamingProvider provider, EnrichmentRequest request, bool canSearch, CancellationToken cancellationToken)
     {
         IEnumerable<StreamingSearchResult> found;
         if (provider is IStreamingNameLookup byName)
@@ -71,18 +71,18 @@ public sealed class CatalogEnrichmentService(IEnumerable<IStreamingProvider> pro
         }
         else
         {
-            return null;
+            return [];
         }
 
-        return found.FirstOrDefault(result => result.Type == request.Type && result.Links.Count > 0);
+        return [.. found.Where(result => result.Type == request.Type && result.Links.Count > 0)];
     }
 
     private async Task<ProviderEnrichment> CheckAsync(IStreamingProvider provider, EnrichmentRequest request, StreamingLookupKey? key, CancellationToken cancellationToken)
     {
         var existing = request.ExistingLinks.Where(link => provider.LinkPlatformCodes.Contains(link.PlatformCode)).ToList();
 
-        ProviderEnrichment Result(LookupOutcome outcome, IReadOnlyList<ProviderLinkCandidate> links) =>
-            new(provider.ProviderCode, provider.LinkPlatformCodes, outcome, links);
+        ProviderEnrichment Result(LookupOutcome outcome, IReadOnlyList<ProviderLinkCandidate> links, bool confirmed) =>
+            new(provider.ProviderCode, provider.LinkPlatformCodes, outcome, links, confirmed);
 
         try
         {
@@ -91,23 +91,25 @@ public sealed class CatalogEnrichmentService(IEnumerable<IStreamingProvider> pro
             if (key is not null && canAskAgain)
             {
                 var found = await provider.LookupAsync(key, cancellationToken);
-                var match = found.FirstOrDefault(result => result.Type == request.Type && result.Links.Count > 0);
-                if (match is not null)
+                var matches = found.Where(result => result.Type == request.Type && result.Links.Count > 0).ToList();
+                if (matches.Count > 0)
                 {
-                    return Result(LookupOutcome.ExactMatch, match.Links);
+                    // Candidates in the provider's own preference order (e.g. a Discogs master, then
+                    // its release) — the caller takes the first one not already taken by another entity.
+                    return Result(LookupOutcome.ExactMatch, [.. matches.SelectMany(match => match.Links)], confirmed: true);
                 }
             }
             else if (existing.Count == 0)
             {
                 // Nothing to keep and no code to ask with: find the item by its artist and title.
-                var match = await FindByNameAsync(provider, request, canAskAgain, cancellationToken);
-                if (match is not null)
+                var matches = await FindByNameAsync(provider, request, canAskAgain, cancellationToken);
+                if (matches.Count > 0)
                 {
-                    return Result(LookupOutcome.NameMatch, match.Links);
+                    return Result(LookupOutcome.NameMatch, [.. matches.SelectMany(match => match.Links)], confirmed: true);
                 }
             }
 
-            return existing.Count > 0 ? Result(LookupOutcome.NameMatch, existing) : Result(LookupOutcome.NotFound, []);
+            return existing.Count > 0 ? Result(LookupOutcome.NameMatch, existing, confirmed: false) : Result(LookupOutcome.NotFound, [], confirmed: false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -116,7 +118,7 @@ public sealed class CatalogEnrichmentService(IEnumerable<IStreamingProvider> pro
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Streaming provider {ProviderCode} failed; recording the check as failed.", provider.ProviderCode);
-            return Result(LookupOutcome.Failed, []);
+            return Result(LookupOutcome.Failed, [], confirmed: false);
         }
     }
 }

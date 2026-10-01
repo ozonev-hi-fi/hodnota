@@ -64,6 +64,22 @@ public class CatalogEnrichmentServiceTests
         results.Should().ContainSingle();
         results[0].Outcome.Should().Be(LookupOutcome.ExactMatch);
         results[0].Links.Should().Equal(found);
+        results[0].Confirmed.Should().BeTrue("the provider answered just now");
+    }
+
+    [Fact]
+    public async Task EnrichAsync_LookupFindsSeveralMatches_LinksOfAllOfThemInOrder()
+    {
+        var discogs = NewProvider("discogs");
+        var master = Link("discogs", "master:1");
+        var release = Link("discogs", "release:2");
+        discogs.LookupAsync(Arg.Any<StreamingLookupKey>(), Arg.Any<CancellationToken>())
+            .Returns([Result("Album", StreamingResultType.Release, master), Result("Album", StreamingResultType.Release, release)]);
+
+        var results = await RunAsync(AlbumRequest(), discogs);
+
+        results.Single().Outcome.Should().Be(LookupOutcome.ExactMatch);
+        results.Single().Links.Should().Equal([master, release], "the caller tries them in order and saves the first one not taken elsewhere");
     }
 
     [Fact]
@@ -102,6 +118,7 @@ public class CatalogEnrichmentServiceTests
 
         results[0].Outcome.Should().Be(LookupOutcome.NameMatch);
         results[0].Links.Should().Equal(SearchRowTidalLink);
+        results[0].Confirmed.Should().BeFalse("nothing new was confirmed, the search row's link was only kept");
     }
 
     [Fact]

@@ -17,7 +17,6 @@ vi.mock('./api/catalog.ts', () => ({
     type: 'Song',
     name: 'Test Song',
     artist: 'Test Artist',
-    links: [],
     platforms: [],
     isComplete: true,
   }),

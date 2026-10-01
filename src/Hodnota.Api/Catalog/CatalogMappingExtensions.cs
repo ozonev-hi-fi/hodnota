@@ -22,7 +22,6 @@ public static class CatalogMappingExtensions
         view.Page.Type.ToCandidateType(),
         view.Page.Name,
         view.Page.ArtistName,
-        [.. view.Page.Links.Select(link => new SharePageLinkResponse(link.PlatformCode, link.Url, link.PlatformType.ToContractType()))],
         [.. view.Rows.Select(row => row.ToResponse())],
         view.IsComplete);
 
