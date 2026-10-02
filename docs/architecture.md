@@ -13,7 +13,7 @@ Status: v1 architecture designed — see [decisions/0003](decisions/0003-initial
 
 ## Streaming-provider integration
 
-Each supported service (see list below) implements a shared `IStreamingProvider` interface in its own class under `Hodnota.Infrastructure.Providers.<Service>`, with its own auth and rate-limit handling and a `ProviderCode` identifying it. Search and exact lookup by ISRC/UPC (`LookupAsync`, used by resolve-time enrichment below) are implemented; resolve-by-URL was [decisions/0003](decisions/0003-initial-architecture.md)'s original sketch for the interface but isn't built yet — added if/when a real caller needs it. `IStreamingProvider` is what's fixed by this abstraction — the mechanism a provider uses *internally* to talk to its service is that provider's own implementation choice: an official free SDK when the vendor provides one, otherwise a named `HttpClient` via `IHttpClientFactory`. Reasoning and interface shape: [decisions/0003](decisions/0003-initial-architecture.md), clarified by [decisions/0008](decisions/0008-youtube-search-sharepage-skeleton.md).
+Each supported service (see list below) implements a shared `IStreamingProvider` interface in its own class under `Hodnota.Infrastructure.Providers.<Service>`, with its own auth and rate-limit handling and a `ProviderCode` identifying it. Search and exact lookup by ISRC/UPC (`LookupAsync`, used by resolve-time enrichment below) are implemented; resolve-by-URL was [decisions/0003](decisions/0003-initial-architecture.md)'s original sketch for the interface but isn't built yet — see [ideas.md](ideas.md#paste-a-link-instead-of-searching) for the current shape of that idea. `IStreamingProvider` is what's fixed by this abstraction — the mechanism a provider uses *internally* to talk to its service is that provider's own implementation choice: an official free SDK when the vendor provides one, otherwise a named `HttpClient` via `IHttpClientFactory`. Reasoning and interface shape: [decisions/0003](decisions/0003-initial-architecture.md), clarified by [decisions/0008](decisions/0008-youtube-search-sharepage-skeleton.md).
 
 An Application-layer aggregator (`CatalogSearchService`) fans a search out to every registered provider concurrently, isolating per-provider failures — one provider throwing does not fail the search, only every provider failing does — and merges the results with `SearchResultMerger`: providers are consulted in a fixed trust order (`ProviderTrustOrder`), the highest-trust provider that returned results becomes the "spine" (its rows and their displayed name/artist/image win), and other providers' results attach to a spine row when a normalized-key match (`SearchResultKey`) recognizes them as the same song/album, or are appended as their own row otherwise. This is deliberately not exact-string or fuzzy-score matching — see [decisions/0011](decisions/0011-spotify-provider-and-cross-provider-result-merging.md) for the normalization rules and the bias toward a missed merge over a false one.
 
@@ -89,8 +89,8 @@ Latest-stable-everything version policy; `hodnota.slnx` at repo root with one ce
 
 ## UX Notes
 
-- Multiple themes: dark, light, a classic MS-DOS-style theme, possibly more.
-- Localization at every layer: API, Web UI, mobile app.
+- Multiple themes: dark, light, a classic MS-DOS-style theme, possibly more — see [ideas.md](ideas.md#multiple-uiux-themes).
+- Localization at every layer: API, Web UI, mobile app — see [ideas.md](ideas.md#localization-support).
 - Screens: home/search, create/edit/view sharing page, user profile with a list of the user's pages.
 
 ## Branching & Versioning Strategy
