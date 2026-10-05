@@ -33,7 +33,7 @@ public class DependencyInjectionTests
             .Build();
 
     [Fact]
-    public void AddInfrastructure_WithoutSpotifyOrQobuzCredentials_RegistersOnlyTheFailFastProviders()
+    public void AddInfrastructure_WithoutSpotifyOrQobuzCredentials_RegistersOnlyTheUnconditionalProviders()
     {
         var configuration = BuildConfiguration(new Dictionary<string, string?>());
         var services = new ServiceCollection().AddInfrastructure(configuration);
@@ -41,7 +41,7 @@ public class DependencyInjectionTests
 
         var streamingProviders = provider.GetServices<IStreamingProvider>();
 
-        streamingProviders.Select(p => p.ProviderCode).Should().BeEquivalentTo([ProviderCodes.YouTube, ProviderCodes.Discogs, ProviderCodes.Tidal]);
+        streamingProviders.Select(p => p.ProviderCode).Should().BeEquivalentTo([ProviderCodes.YouTube, ProviderCodes.Discogs, ProviderCodes.Tidal, ProviderCodes.Deezer]);
     }
 
     [Theory]
@@ -114,7 +114,7 @@ public class DependencyInjectionTests
 
         var streamingProviders = provider.GetServices<IStreamingProvider>();
 
-        streamingProviders.Select(p => p.ProviderCode).Should().BeEquivalentTo([ProviderCodes.YouTube, ProviderCodes.Discogs, ProviderCodes.Tidal, ProviderCodes.Spotify]);
+        streamingProviders.Select(p => p.ProviderCode).Should().BeEquivalentTo([ProviderCodes.YouTube, ProviderCodes.Discogs, ProviderCodes.Tidal, ProviderCodes.Deezer, ProviderCodes.Spotify]);
     }
 
     [Fact]
@@ -142,7 +142,7 @@ public class DependencyInjectionTests
 
         var streamingProviders = provider.GetServices<IStreamingProvider>();
 
-        streamingProviders.Select(p => p.ProviderCode).Should().BeEquivalentTo([ProviderCodes.YouTube, ProviderCodes.Discogs, ProviderCodes.Tidal, ProviderCodes.Qobuz]);
+        streamingProviders.Select(p => p.ProviderCode).Should().BeEquivalentTo([ProviderCodes.YouTube, ProviderCodes.Discogs, ProviderCodes.Tidal, ProviderCodes.Deezer, ProviderCodes.Qobuz]);
     }
 
     [Fact]
