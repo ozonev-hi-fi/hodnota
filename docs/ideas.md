@@ -11,6 +11,14 @@ Each entry has:
 
 An idea moves to `roadmap.md` as one line once it's prioritized; an ADR entry shrinks this one to a pointer once it's accepted.
 
+## Add proper logging and audit
+
+**Status:** high priority idea.
+
+**Problem.**
+1. No logging at all, dev console only, not acceptable for UAT. Something happens - nobody knows what.
+2. Once somebody (person or system actor) change something (especially in catalog) there is no history for that. Critical once system have editing functionality and, for example, the [User-suggested links](#user-suggested-links)
+
 ---
 
 ## Paste a link instead of searching
@@ -32,7 +40,7 @@ An idea moves to `roadmap.md` as one line once it's prioritized; an ADR entry sh
    | Case | Text |
    |---|---|
    | Unrecognized site | "Links from this site aren't supported" |
-   | Recognized platform, no provider implemented yet (e.g. Deezer) | "Deezer links aren't supported yet" |
+   | Recognized platform, no provider implemented yet (e.g. Apple Music) | "Apple Music links aren't supported yet" |
    | Provider not currently running (Spotify dormant, Qobuz without credentials) | "Can't read Spotify links right now" |
    | Artist link | "Artist links aren't supported yet" |
    | Playlist link | "Playlist links aren't supported" |
@@ -128,7 +136,7 @@ A song's share page has no Discogs row, because Discogs is album-only. It could 
 
 **Status:** idea.
 
-`ProviderTrustOrder` (`discogs, qobuz, tidal, spotify, youtube`) decides two things at once: whose metadata wins when providers disagree (artist spelling, release date), and which search rows come first. Splitting it into a catalog-authority order and a display order is deferred in [decisions/0014](decisions/0014-resolve-time-catalog-enrichment.md)'s "Metadata authority" and "Out of scope" sections. Working hypothesis from the original roadmap brief: Discogs first for release/artist metadata.
+`ProviderTrustOrder` (`discogs, qobuz, tidal, spotify, deezer, youtube`) decides two things at once: whose metadata wins when providers disagree (artist spelling, release date), and which search rows come first. Splitting it into a catalog-authority order and a display order is deferred in [decisions/0014](decisions/0014-resolve-time-catalog-enrichment.md)'s "Metadata authority" and "Out of scope" sections. Working hypothesis from the original roadmap brief: Discogs first for release/artist metadata.
 
 ---
 
@@ -145,3 +153,14 @@ Dark, light, a classic MS-DOS-style theme, possibly more.
 **Status:** idea.
 
 Localization at every layer: API, Web UI, mobile app.
+
+---
+
+## Move docs to some wiki and use a board insted ADR files
+
+**Status:** idea
+
+**Problem.**
+Not a problem, just looking for a best way in case solo project will have contributors.
+
+---

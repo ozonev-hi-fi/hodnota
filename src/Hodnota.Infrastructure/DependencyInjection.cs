@@ -6,6 +6,7 @@ using Google.Apis.YouTube.v3;
 using Hodnota.Application.Catalog;
 using Hodnota.Infrastructure.Catalog;
 using Hodnota.Infrastructure.Identity;
+using Hodnota.Infrastructure.Providers.Deezer;
 using Hodnota.Infrastructure.Providers.Discogs;
 using Hodnota.Infrastructure.Providers.Qobuz;
 using Hodnota.Infrastructure.Providers.Spotify;
@@ -126,6 +127,16 @@ public static class DependencyInjection
         services.AddSingleton<TidalAccessTokenProvider>();
         services.AddSingleton<TidalApiClient>();
         services.AddScoped<IStreamingProvider, TidalStreamingProvider>();
+
+        // Deezer's catalog endpoints need no app id or token (see ADR 0015), so unlike every other
+        // provider there is no credentials object and nothing to fail fast on; it is always registered.
+        services.AddHttpClient(DeezerConfiguration.ApiHttpClientName, client =>
+        {
+            client.BaseAddress = new Uri("https://api.deezer.com/");
+            client.Timeout = TimeSpan.FromSeconds(10);
+        });
+        services.AddSingleton<DeezerApiClient>();
+        services.AddScoped<IStreamingProvider, DeezerStreamingProvider>();
 
         // Spotify has required an active Premium subscription on the app-owner's account to use the
         // Web API at all since Feb 2026 (see ADR 0011's addendum) — unlike YouTube's key, that isn't

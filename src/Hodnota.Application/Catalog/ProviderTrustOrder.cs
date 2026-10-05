@@ -2,7 +2,7 @@ namespace Hodnota.Application.Catalog;
 
 public static class ProviderTrustOrder
 {
-    private static readonly string[] Order = [ProviderCodes.Discogs, ProviderCodes.Qobuz, ProviderCodes.Tidal, ProviderCodes.Spotify, ProviderCodes.YouTube];
+    private static readonly string[] Order = [ProviderCodes.Discogs, ProviderCodes.Qobuz, ProviderCodes.Tidal, ProviderCodes.Spotify, ProviderCodes.Deezer, ProviderCodes.YouTube];
 
     public static int RankOf(string providerCode)
     {
