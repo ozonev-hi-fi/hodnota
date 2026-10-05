@@ -54,8 +54,6 @@ public sealed class DeezerStreamingProvider(DeezerApiClient apiClient) : IStream
 
     internal static bool IsUsable(DeezerAlbum album) => album.Id.HasValue && !string.IsNullOrWhiteSpace(album.Title);
 
-    // Deezer's title already carries the version ("Enter Sandman (Remastered 2021)"), unlike
-    // Tidal's separate version field, so no Title (Version) building is needed here (ADR 0015).
     internal static StreamingSearchResult ToSearchResult(DeezerTrack track)
     {
         var externalId = track.Id!.Value.ToString();

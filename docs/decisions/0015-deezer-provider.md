@@ -18,7 +18,7 @@ Deezer still raises questions those ADRs do not answer:
 
 ### Access: the public catalog endpoints, behind the ToS-review gate
 
-hodnota calls only Deezer's public catalog endpoints on `https://api.deezer.com/`. They need no app id, no token, and no user login, and hodnota never plays audio. This is the documented "simple API", not an extracted or reverse-engineered credential.
+hodnota calls only Deezer's public catalog endpoints on `https://api.deezer.com/`. They need no app id, no token, and no user login, and hodnota never plays audio. This is Deezer's documented "simple API".
 
 The access is still not clean:
 

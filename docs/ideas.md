@@ -158,9 +158,18 @@ Localization at every layer: API, Web UI, mobile app.
 
 ## Move docs to some wiki and use a board insted ADR files
 
-**Status:** idea
+**Status:** idea.
 
 **Problem.**
 Not a problem, just looking for a best way in case solo project will have contributors.
+
+---
+
+## CSP content security policy
+
+**Status:** idea.
+
+**Problem.**
+The CSP was out of focus. Must be a part of the UI implementation stage.
 
 ---

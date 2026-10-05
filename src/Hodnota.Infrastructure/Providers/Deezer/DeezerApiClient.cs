@@ -10,10 +10,8 @@ public sealed class DeezerApiClient(IHttpClientFactory httpClientFactory, ILogge
 {
     private const int ResultLimit = 5;
 
-    // Deezer's quota-exceeded error code (ADR 0015); handled like every other provider's 429.
     private const int QuotaExceededCode = 4;
 
-    // Deezer's "no data" error code (ADR 0015); not a failure, just an empty/missing result.
     private const int NotFoundCode = 800;
 
     public async Task<IReadOnlyList<DeezerTrack>> SearchTracksAsync(string query, CancellationToken cancellationToken)
@@ -44,9 +42,6 @@ public sealed class DeezerApiClient(IHttpClientFactory httpClientFactory, ILogge
         return album.Error is null ? album : null;
     }
 
-    // Translates Deezer's in-body error (ADR 0015) the same way StreamingSearchResponseReader
-    // translates a transport-level 429/non-success status: log and throw, no retry. A 800 ("no
-    // data") is not an error here — it means an empty or missing result, handled by the caller.
     private void ThrowIfError(DeezerError? error)
     {
         if (error is null || error.Code == NotFoundCode)

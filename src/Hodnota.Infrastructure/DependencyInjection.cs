@@ -128,8 +128,6 @@ public static class DependencyInjection
         services.AddSingleton<TidalApiClient>();
         services.AddScoped<IStreamingProvider, TidalStreamingProvider>();
 
-        // Deezer's catalog endpoints need no app id or token (see ADR 0015), so unlike every other
-        // provider there is no credentials object and nothing to fail fast on; it is always registered.
         services.AddHttpClient(DeezerConfiguration.ApiHttpClientName, client =>
         {
             client.BaseAddress = new Uri("https://api.deezer.com/");

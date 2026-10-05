@@ -2,8 +2,6 @@ using System.Text.Json.Serialization;
 
 namespace Hodnota.Infrastructure.Providers.Deezer;
 
-// Deezer answers most failures, including "not found", with HTTP 200 and this body instead of a
-// non-success status (see ADR 0015), so every response/page type carries an optional Error.
 public sealed record DeezerError(
     [property: JsonPropertyName("type")] string? Type,
     [property: JsonPropertyName("message")] string? Message,
