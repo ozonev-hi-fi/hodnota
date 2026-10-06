@@ -2,6 +2,7 @@ using AwesomeAssertions;
 
 using Hodnota.Application.Catalog;
 using Hodnota.Infrastructure;
+using Hodnota.Infrastructure.Providers.AppleMusic;
 using Hodnota.Infrastructure.Providers.Discogs;
 using Hodnota.Infrastructure.Providers.Qobuz;
 using Hodnota.Infrastructure.Providers.Spotify;
@@ -41,7 +42,7 @@ public class DependencyInjectionTests
 
         var streamingProviders = provider.GetServices<IStreamingProvider>();
 
-        streamingProviders.Select(p => p.ProviderCode).Should().BeEquivalentTo([ProviderCodes.YouTube, ProviderCodes.Discogs, ProviderCodes.Tidal, ProviderCodes.Deezer]);
+        streamingProviders.Select(p => p.ProviderCode).Should().BeEquivalentTo([ProviderCodes.YouTube, ProviderCodes.Discogs, ProviderCodes.Tidal, ProviderCodes.Deezer, ProviderCodes.AppleMusic]);
     }
 
     [Theory]
@@ -114,7 +115,7 @@ public class DependencyInjectionTests
 
         var streamingProviders = provider.GetServices<IStreamingProvider>();
 
-        streamingProviders.Select(p => p.ProviderCode).Should().BeEquivalentTo([ProviderCodes.YouTube, ProviderCodes.Discogs, ProviderCodes.Tidal, ProviderCodes.Deezer, ProviderCodes.Spotify]);
+        streamingProviders.Select(p => p.ProviderCode).Should().BeEquivalentTo([ProviderCodes.YouTube, ProviderCodes.Discogs, ProviderCodes.Tidal, ProviderCodes.Deezer, ProviderCodes.AppleMusic, ProviderCodes.Spotify]);
     }
 
     [Fact]
@@ -142,7 +143,7 @@ public class DependencyInjectionTests
 
         var streamingProviders = provider.GetServices<IStreamingProvider>();
 
-        streamingProviders.Select(p => p.ProviderCode).Should().BeEquivalentTo([ProviderCodes.YouTube, ProviderCodes.Discogs, ProviderCodes.Tidal, ProviderCodes.Deezer, ProviderCodes.Qobuz]);
+        streamingProviders.Select(p => p.ProviderCode).Should().BeEquivalentTo([ProviderCodes.YouTube, ProviderCodes.Discogs, ProviderCodes.Tidal, ProviderCodes.Deezer, ProviderCodes.AppleMusic, ProviderCodes.Qobuz]);
     }
 
     [Fact]
@@ -158,5 +159,28 @@ public class DependencyInjectionTests
         var streamingProviders = provider.GetServices<IStreamingProvider>();
 
         streamingProviders.Select(p => p.ProviderCode).Should().NotContain(ProviderCodes.Qobuz);
+    }
+
+    [Fact]
+    public void AddInfrastructure_NoAppleMusicCountryConfigured_DefaultsToUs()
+    {
+        var configuration = BuildConfiguration(new Dictionary<string, string?>());
+        var services = new ServiceCollection().AddInfrastructure(configuration);
+        using var provider = services.BuildServiceProvider();
+
+        provider.GetRequiredService<AppleMusicSettings>().Country.Should().Be("US");
+    }
+
+    [Fact]
+    public void AddInfrastructure_AppleMusicCountryConfigured_UsesTheConfiguredValue()
+    {
+        var configuration = BuildConfiguration(new Dictionary<string, string?>
+        {
+            [AppleMusicConfiguration.CountryConfigKey] = "GB",
+        });
+        var services = new ServiceCollection().AddInfrastructure(configuration);
+        using var provider = services.BuildServiceProvider();
+
+        provider.GetRequiredService<AppleMusicSettings>().Country.Should().Be("GB");
     }
 }

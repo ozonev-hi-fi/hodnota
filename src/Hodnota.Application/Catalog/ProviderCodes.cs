@@ -2,6 +2,7 @@ namespace Hodnota.Application.Catalog;
 
 public static class ProviderCodes
 {
+    public const string AppleMusic = "apple-music";
     public const string Deezer = "deezer";
     public const string Discogs = "discogs";
     public const string Qobuz = "qobuz";

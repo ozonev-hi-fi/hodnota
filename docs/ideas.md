@@ -148,6 +148,14 @@ Dark, light, a classic MS-DOS-style theme, possibly more.
 
 ---
 
+## Storefront/country selection per user
+
+**Status:** idea.
+
+Apple Music's search and links depend on a storefront country (`AppleMusic:Country`, see [decisions/0016](decisions/0016-apple-music-provider.md)); it is a single fixed config value (`US`) today. Pick it per user instead: from the request's IP address, or overridden by an explicit "I'm from" preference on the account. Likely useful for other providers too if a similar per-region setting shows up later.
+
+---
+
 ## Localization support
 
 **Status:** idea.
