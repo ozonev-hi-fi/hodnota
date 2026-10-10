@@ -156,6 +156,23 @@ Apple Music's search and links depend on a storefront country (`AppleMusic:Count
 
 ---
 
+## Compilation / "Various Artists" releases
+
+**Status:** idea.
+
+**Problem.** A compilation's tracks each have their own artist, but the release itself is credited to "Various Artists" (or a curator). The catalog has one artist per release, and search merging and enrichment match on artist + title. A compilation fits neither cleanly. Apple Music's song-grouped album search ([decisions/0016](decisions/0016-apple-music-provider.md)) also credits a compilation to the track's artist (`artistName`), not the release's own credit (`collectionArtistName`).
+
+**Example.** An album search for "metallica enter sandman" on Apple Music can return a compilation that contains the track, credited to "Metallica" instead of "Various Artists" (not yet confirmed live).
+
+**Settled.** Compilations get share pages. They are real releases people want to share, so dropping them from search is not an option.
+
+**Open questions, for the ADR when this is picked up:**
+- How a compilation is stored in the catalog: a shared "Various Artists" artist row (its auto-creation was deferred in [decisions/0007](decisions/0007-catalog-data-model.md)), no release-level artist, or per-track artists only.
+- How it is matched across providers: artist + title is weak when the artist is "Various Artists" (each provider spells it differently, and many compilations share generic titles like "Greatest Hits"). UPC is the natural key, but Apple Music has no usable UPC lookup.
+- Which artist search results show, and how `ReleaseType.Compilation` gets set (Deezer maps `compile` to it; Apple Music has no equivalent field).
+
+---
+
 ## Localization support
 
 **Status:** idea.
