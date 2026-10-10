@@ -45,8 +45,11 @@ public sealed class AppleMusicStreamingProvider(AppleMusicApiClient apiClient, A
 
         // The album-search endpoint misses real albums (ADR 0016), so results from it are combined
         // with albums grouped out of a song search, album-search hits taking priority on a tie.
-        var albumItems = await apiClient.SearchAlbumsAsync(query, cancellationToken);
-        var songItems = await apiClient.SearchSongsForAlbumsAsync(query, cancellationToken);
+        var albumTask = apiClient.SearchAlbumsAsync(query, cancellationToken);
+        var songTask = apiClient.SearchSongsForAlbumsAsync(query, cancellationToken);
+        await Task.WhenAll(albumTask, songTask);
+        var albumItems = albumTask.Result;
+        var songItems = songTask.Result;
 
         var seenAlbumIds = new HashSet<long>();
         var merged = new List<ITunesItem>();

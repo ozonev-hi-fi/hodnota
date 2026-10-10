@@ -173,6 +173,31 @@ Apple Music's search and links depend on a storefront country (`AppleMusic:Count
 
 ---
 
+## Rate-limit-aware provider retry and share page placeholders
+
+**Status:** idea.
+
+**Problem.** `CatalogEnrichmentService.CheckAsync` catches every provider failure the same way — logs it, returns `LookupOutcome.Failed` — with no distinction for a rate limit. `StreamingSearchResponseReader.ReadAsync` already detects HTTP 429 and reads the `Retry-After` header, but only logs it before wrapping the error in the same untyped `StreamingProviderException` as any other failure, so the wait-time information is thrown away. [decisions/0003](decisions/0003-initial-architecture.md) originally named per-provider Polly-based (Polly: a .NET resilience/retry library) rate-limit policies as a goal; this was never built, and no Polly reference exists in the repo today. This gets more painful as more providers carry small, shared, per-server-IP limits — Apple Music's is 20 calls/minute, shared across every hodnota user ([decisions/0016](decisions/0016-apple-music-provider.md)).
+
+**Example.** A user resolves a share page for an album hodnota hasn't cataloged yet, right when Apple Music's shared budget is already used up by other users that minute. Today the row goes straight to permanently `Failed`, even though retrying 10 seconds later would likely succeed.
+
+**Idea, roughly** (not a design to implement yet):
+- Make the rate-limit case distinguishable close to the HTTP call, carrying the `Retry-After` wait instead of discarding it.
+- Add a row state between `Checking` and `Failed` (`PlatformRowState` in `Hodnota.Application`, mirrored in `Hodnota.Contracts`) for "rate-limited, will retry," shown on the share page as something like "{provider} hasn't responded yet — the link will appear later."
+- Extend the existing `EnrichmentWorker`/`InProcessEnrichmentQueue` per-`(sharePageId, providerCode)` job model (not a new mechanism) to wait out the backoff and retry, saving `ProviderCheck`/`ProviderLink` and pushing the update through `ShareEventHub` exactly like a normal enrichment success today — the "platform" SSE event shape already accommodates a new state value with no shape change needed.
+- The same waiting/retrying mechanism could extend to two more cases, both naturally driven by the already-existing `ProviderCheck.CheckedAtUtc` / `ProviderLink.LastVerifiedUtc` timestamps (currently unused for this purpose):
+  - **Backfill:** periodically re-ask a provider that previously returned `NotFound`, in case the catalog there changed since.
+  - **Staleness/actualization:** periodically re-verify an existing `ProviderLink` still resolves, in case the item was pulled from that platform.
+
+**Open questions, for the ADR when this is picked up:**
+- Whether a release's own availability check can stand in for all of its tracks (check the release once, mark every track on it available, skip per-track re-verification) — plausible, but unconfirmed per vendor: a platform could in principle pull one track from a release while the release stays up. Flagged as an assumption to verify, not a settled rule.
+- How to avoid a thundering herd: many users waiting on the same rate-limited provider shouldn't all independently re-trigger retries that immediately blow through the limit again.
+- Whether backfill/staleness scans need their own scheduling mechanism — there is no periodic/cron-style background job anywhere in the codebase today (`EnrichmentWorker` is purely queue-driven, one job per enqueued request) — and how such a scan avoids re-triggering the very rate limits it's meant to respect.
+- What exception/type change is needed to carry a provider's retry-after delay out of `StreamingSearchResponseReader`/`StreamingProviderException` to whatever schedules the retry.
+- Whether `InProcessEnrichmentQueue`'s in-memory, per-instance nature (a restart drops in-flight jobs; the next page visit re-enqueues them) is good enough for a delayed retry that might need to survive minutes of waiting, or whether this needs durable storage.
+
+---
+
 ## Localization support
 
 **Status:** idea.

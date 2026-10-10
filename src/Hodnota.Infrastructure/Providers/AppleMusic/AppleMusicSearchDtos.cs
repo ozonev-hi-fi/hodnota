@@ -18,4 +18,5 @@ public sealed record ITunesItem(
     [property: JsonPropertyName("trackViewUrl")] string? TrackViewUrl,
     [property: JsonPropertyName("collectionViewUrl")] string? CollectionViewUrl,
     [property: JsonPropertyName("artworkUrl100")] string? ArtworkUrl100,
+    // Parsed but intentionally unused: isStreamable:false items are kept, not filtered (ADR 0016).
     [property: JsonPropertyName("isStreamable")] bool? IsStreamable);
