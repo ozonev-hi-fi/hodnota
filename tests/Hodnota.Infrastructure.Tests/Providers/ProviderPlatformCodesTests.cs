@@ -1,6 +1,7 @@
 using AwesomeAssertions;
 
 using Hodnota.Application.Catalog;
+using Hodnota.Infrastructure.Providers.AppleMusic;
 using Hodnota.Infrastructure.Providers.Deezer;
 using Hodnota.Infrastructure.Providers.Discogs;
 using Hodnota.Infrastructure.Providers.Qobuz;
@@ -41,6 +42,7 @@ public class ProviderPlatformCodesTests
     {
         ProviderTypes().Select(type => type.Name).Should().BeEquivalentTo(
         [
+            nameof(AppleMusicStreamingProvider),
             nameof(DeezerStreamingProvider),
             nameof(DiscogsStreamingProvider),
             nameof(QobuzStreamingProvider),

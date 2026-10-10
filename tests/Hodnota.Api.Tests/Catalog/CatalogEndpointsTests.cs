@@ -408,7 +408,7 @@ public class CatalogEndpointsTests(CatalogApiFactory factory) : IClassFixture<Ca
         var response = await _client.PostAsJsonAsync("/api/catalog/resolve", new ResolveRequest(candidateId));
 
         var sharePage = await response.Content.ReadFromJsonAsync<SharePageResponse>();
-        sharePage!.Platforms.Select(p => p.Platform).Should().Equal("discogs", "qobuz", "tidal", "spotify", "deezer", "youtube");
+        sharePage!.Platforms.Select(p => p.Platform).Should().Equal("discogs", "qobuz", "tidal", "spotify", "deezer", "apple-music", "youtube");
         sharePage.Platforms.Should().OnlyContain(p => p.State == RowState.Checking && p.Url == null);
         sharePage.IsComplete.Should().BeFalse();
     }
@@ -461,7 +461,7 @@ public class CatalogEndpointsTests(CatalogApiFactory factory) : IClassFixture<Ca
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         response.Content.Headers.ContentType!.MediaType.Should().Be("text/event-stream");
-        lines.Count(line => line == "event: platform").Should().Be(6);
+        lines.Count(line => line == "event: platform").Should().Be(7);
         lines.Should().Contain(line => line.StartsWith("data: ", StringComparison.Ordinal) && line.Contains("\"platform\":\"youtube\"") && line.Contains("\"state\":\"OtherVersion\""));
         lines.Last(line => line.StartsWith("event:", StringComparison.Ordinal)).Should().Be("event: complete");
     }

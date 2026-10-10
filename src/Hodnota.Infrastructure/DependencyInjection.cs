@@ -6,6 +6,7 @@ using Google.Apis.YouTube.v3;
 using Hodnota.Application.Catalog;
 using Hodnota.Infrastructure.Catalog;
 using Hodnota.Infrastructure.Identity;
+using Hodnota.Infrastructure.Providers.AppleMusic;
 using Hodnota.Infrastructure.Providers.Deezer;
 using Hodnota.Infrastructure.Providers.Discogs;
 using Hodnota.Infrastructure.Providers.Qobuz;
@@ -135,6 +136,20 @@ public static class DependencyInjection
         });
         services.AddSingleton<DeezerApiClient>();
         services.AddScoped<IStreamingProvider, DeezerStreamingProvider>();
+
+        // No credentials, like Deezer above — only the iTunes storefront to search (ADR 0016).
+        services.AddSingleton(_ =>
+        {
+            var country = configuration[AppleMusicConfiguration.CountryConfigKey];
+            return new AppleMusicSettings(string.IsNullOrEmpty(country) ? AppleMusicConfiguration.DefaultCountry : country);
+        });
+        services.AddHttpClient(AppleMusicConfiguration.ApiHttpClientName, client =>
+        {
+            client.BaseAddress = new Uri("https://itunes.apple.com/");
+            client.Timeout = TimeSpan.FromSeconds(10);
+        });
+        services.AddSingleton<AppleMusicApiClient>();
+        services.AddScoped<IStreamingProvider, AppleMusicStreamingProvider>();
 
         // Spotify has required an active Premium subscription on the app-owner's account to use the
         // Web API at all since Feb 2026 (see ADR 0011's addendum) — unlike YouTube's key, that isn't

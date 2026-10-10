@@ -148,6 +148,56 @@ Dark, light, a classic MS-DOS-style theme, possibly more.
 
 ---
 
+## Storefront/country selection per user
+
+**Status:** idea.
+
+Apple Music's search and links depend on a storefront country (`AppleMusic:Country`, see [decisions/0016](decisions/0016-apple-music-provider.md)); it is a single fixed config value (`US`) today. Pick it per user instead: from the request's IP address, or overridden by an explicit "I'm from" preference on the account. Likely useful for other providers too if a similar per-region setting shows up later.
+
+---
+
+## Compilation / "Various Artists" releases
+
+**Status:** idea.
+
+**Problem.** A compilation's tracks each have their own artist, but the release itself is credited to "Various Artists" (or a curator). The catalog has one artist per release, and search merging and enrichment match on artist + title. A compilation fits neither cleanly. Apple Music's song-grouped album search ([decisions/0016](decisions/0016-apple-music-provider.md)) also credits a compilation to the track's artist (`artistName`), not the release's own credit (`collectionArtistName`).
+
+**Example.** An album search for "metallica enter sandman" on Apple Music can return a compilation that contains the track, credited to "Metallica" instead of "Various Artists" (not yet confirmed live).
+
+**Settled.** Compilations get share pages. They are real releases people want to share, so dropping them from search is not an option.
+
+**Open questions, for the ADR when this is picked up:**
+- How a compilation is stored in the catalog: a shared "Various Artists" artist row (its auto-creation was deferred in [decisions/0007](decisions/0007-catalog-data-model.md)), no release-level artist, or per-track artists only.
+- How it is matched across providers: artist + title is weak when the artist is "Various Artists" (each provider spells it differently, and many compilations share generic titles like "Greatest Hits"). UPC is the natural key, but Apple Music has no usable UPC lookup.
+- Which artist search results show, and how `ReleaseType.Compilation` gets set (Deezer maps `compile` to it; Apple Music has no equivalent field).
+
+---
+
+## Rate-limit-aware provider retry and share page placeholders
+
+**Status:** idea.
+
+**Problem.** `CatalogEnrichmentService.CheckAsync` catches every provider failure the same way — logs it, returns `LookupOutcome.Failed` — with no distinction for a rate limit. `StreamingSearchResponseReader.ReadAsync` already detects HTTP 429 and reads the `Retry-After` header, but only logs it before wrapping the error in the same untyped `StreamingProviderException` as any other failure, so the wait-time information is thrown away. [decisions/0003](decisions/0003-initial-architecture.md) originally named per-provider Polly-based (Polly: a .NET resilience/retry library) rate-limit policies as a goal; this was never built, and no Polly reference exists in the repo today. This gets more painful as more providers carry small, shared, per-server-IP limits — Apple Music's is 20 calls/minute, shared across every hodnota user ([decisions/0016](decisions/0016-apple-music-provider.md)).
+
+**Example.** A user resolves a share page for an album hodnota hasn't cataloged yet, right when Apple Music's shared budget is already used up by other users that minute. Today the row goes straight to permanently `Failed`, even though retrying 10 seconds later would likely succeed.
+
+**Idea, roughly** (not a design to implement yet):
+- Make the rate-limit case distinguishable close to the HTTP call, carrying the `Retry-After` wait instead of discarding it.
+- Add a row state between `Checking` and `Failed` (`PlatformRowState` in `Hodnota.Application`, mirrored in `Hodnota.Contracts`) for "rate-limited, will retry," shown on the share page as something like "{provider} hasn't responded yet — the link will appear later."
+- Extend the existing `EnrichmentWorker`/`InProcessEnrichmentQueue` per-`(sharePageId, providerCode)` job model (not a new mechanism) to wait out the backoff and retry, saving `ProviderCheck`/`ProviderLink` and pushing the update through `ShareEventHub` exactly like a normal enrichment success today — the "platform" SSE event shape already accommodates a new state value with no shape change needed.
+- The same waiting/retrying mechanism could extend to two more cases, both naturally driven by the already-existing `ProviderCheck.CheckedAtUtc` / `ProviderLink.LastVerifiedUtc` timestamps (currently unused for this purpose):
+  - **Backfill:** periodically re-ask a provider that previously returned `NotFound`, in case the catalog there changed since.
+  - **Staleness/actualization:** periodically re-verify an existing `ProviderLink` still resolves, in case the item was pulled from that platform.
+
+**Open questions, for the ADR when this is picked up:**
+- Whether a release's own availability check can stand in for all of its tracks (check the release once, mark every track on it available, skip per-track re-verification) — plausible, but unconfirmed per vendor: a platform could in principle pull one track from a release while the release stays up. Flagged as an assumption to verify, not a settled rule.
+- How to avoid a thundering herd: many users waiting on the same rate-limited provider shouldn't all independently re-trigger retries that immediately blow through the limit again.
+- Whether backfill/staleness scans need their own scheduling mechanism — there is no periodic/cron-style background job anywhere in the codebase today (`EnrichmentWorker` is purely queue-driven, one job per enqueued request) — and how such a scan avoids re-triggering the very rate limits it's meant to respect.
+- What exception/type change is needed to carry a provider's retry-after delay out of `StreamingSearchResponseReader`/`StreamingProviderException` to whatever schedules the retry.
+- Whether `InProcessEnrichmentQueue`'s in-memory, per-instance nature (a restart drops in-flight jobs; the next page visit re-enqueues them) is good enough for a delayed retry that might need to survive minutes of waiting, or whether this needs durable storage.
+
+---
+
 ## Localization support
 
 **Status:** idea.
