@@ -7,5 +7,8 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Hodnota.Application.Tests" />
+    <!-- So YouTubeChannelResolver (Hodnota.Infrastructure) can reuse SearchResultKey.Normalize
+         instead of duplicating title normalization for its own track-title overlap check. -->
+    <InternalsVisibleTo Include="Hodnota.Infrastructure" />
   </ItemGroup>
 </Project>

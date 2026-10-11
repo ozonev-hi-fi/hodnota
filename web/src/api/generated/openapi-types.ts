@@ -631,6 +631,7 @@ export interface components {
             state: components["schemas"]["PlatformRowState"];
             /** Format: uri */
             url: null | string;
+            resultType?: null | components["schemas"]["CandidateType"];
         };
         /** @enum {unknown} */
         PlatformRowState: "Checking" | "Found" | "OtherVersion" | "NotFound" | "Failed";

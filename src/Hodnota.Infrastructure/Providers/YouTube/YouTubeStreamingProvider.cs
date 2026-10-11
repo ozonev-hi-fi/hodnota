@@ -1,5 +1,3 @@
-using Google;
-using Google.Apis.YouTube.v3;
 using Google.Apis.YouTube.v3.Data;
 
 using Hodnota.Application.Catalog;
@@ -9,11 +7,14 @@ using Microsoft.AspNetCore.WebUtilities;
 
 namespace Hodnota.Infrastructure.Providers.YouTube;
 
-public sealed class YouTubeStreamingProvider(YouTubeService youTubeService) : IStreamingProvider, IStreamingNameLookup
+public sealed class YouTubeStreamingProvider(IYouTubeApiClient apiClient, YouTubeChannelResolver channelResolver) : IStreamingProvider, IStreamingNameLookup
 {
     private const string YouTubeHost = "https://www.youtube.com";
     private const string YouTubeMusicHost = "https://music.youtube.com";
     private const string UnknownArtist = "Unknown";
+    private const int MusicCategoryId = 10;
+    private const int MaxResults = 50;
+    private const int MaxChannelVideoResults = 25;
 
     public string ProviderCode => ProviderCodes.YouTube;
 
@@ -26,31 +27,36 @@ public sealed class YouTubeStreamingProvider(YouTubeService youTubeService) : IS
     public Task<IReadOnlyList<StreamingSearchResult>> LookupAsync(StreamingLookupKey key, CancellationToken cancellationToken) =>
         throw new NotSupportedException();
 
-    public async Task<IReadOnlyList<StreamingSearchResult>> FindByNameAsync(string artistName, string name, StreamingResultType type, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<StreamingSearchResult>> FindByNameAsync(string artistName, string name, StreamingResultType type, IReadOnlyList<string> knownTrackTitles, CancellationToken cancellationToken)
     {
         var results = await SearchAsync($"{artistName} {name}", type, cancellationToken);
-        return [.. results.Where(result => result.Type == type && SearchResultNameMatcher.IsSameItem(result, artistName, name))];
+        var matches = results.Where(result => result.Type == type && SearchResultNameMatcher.IsSameItem(result, artistName, name)).ToList();
+        if (matches.Count > 0 || type != StreamingResultType.Release)
+        {
+            return matches;
+        }
+
+        // No verifiable OLAK album playlist — fall back to a verified Topic track of the album
+        // (ADR 0018 D2), found by confirming the artist's Topic channel (E10) and searching inside
+        // it for the album title (E9).
+        var channelId = await channelResolver.ResolveTopicChannelAsync(artistName, knownTrackTitles, cancellationToken);
+        if (channelId is null)
+        {
+            return [];
+        }
+
+        var channelItems = await apiClient.SearchVideosAsync(name, channelId, MusicCategoryId, MaxChannelVideoResults, cancellationToken);
+        var track = channelItems.Where(IsUsable).Where(YouTubeAuthenticity.HasIntrinsicAuthenticity).Select(ToSearchResult).FirstOrDefault();
+        return track is null ? [] : [track];
     }
 
     public async Task<IReadOnlyList<StreamingSearchResult>> SearchAsync(string query, StreamingResultType type, CancellationToken cancellationToken)
     {
-        var request = youTubeService.Search.List("snippet");
-        request.Q = query;
-        request.Type = type == StreamingResultType.Track ? "video" : "playlist";
-        request.MaxResults = 50;
+        var items = type == StreamingResultType.Track
+            ? await apiClient.SearchVideosAsync(query, channelId: null, categoryId: null, MaxResults, cancellationToken)
+            : await apiClient.SearchPlaylistsAsync(query, MaxResults, cancellationToken);
 
-        SearchListResponse response;
-        try
-        {
-            response = await request.ExecuteAsync(cancellationToken);
-        }
-        catch (GoogleApiException ex)
-        {
-            throw new StreamingProviderException("YouTube search request failed.", ex);
-        }
-
-        var queryWords = SearchResultRelevanceFilter.ParseQueryWords(query);
-        return [.. response.Items.Where(IsUsable).Select(ToSearchResult).Where(result => SearchResultRelevanceFilter.IsRelevant(queryWords, result))];
+        return [.. items.Where(IsUsable).Where(YouTubeAuthenticity.HasIntrinsicAuthenticity).Select(ToSearchResult)];
     }
 
     internal static bool IsUsable(SearchResult item) =>

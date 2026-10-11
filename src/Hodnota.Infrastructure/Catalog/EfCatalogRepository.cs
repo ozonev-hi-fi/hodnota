@@ -138,7 +138,7 @@ public sealed class EfCatalogRepository(ApplicationDbContext dbContext, TimeProv
     {
         var page = await dbContext.SharePages
             .Include(sp => sp.Track)
-            .Include(sp => sp.Release)
+            .Include(sp => sp.Release!).ThenInclude(r => r.Tracks).ThenInclude(rt => rt.Track)
             .FirstOrDefaultAsync(sp => sp.Id == sharePageId, cancellationToken);
         if (page is null)
         {
@@ -147,6 +147,9 @@ public sealed class EfCatalogRepository(ApplicationDbContext dbContext, TimeProv
 
         var links = await FetchProviderLinksAsync(page.TrackId, page.ReleaseId, cancellationToken);
         var artistName = await GetMainArtistNameAsync(page.TrackId, page.ReleaseId, cancellationToken);
+        // Only a Release request needs this (YouTube's channel disambiguation, ADR 0018 D2/E10) —
+        // a Track request has nothing of its own to compare a candidate channel's uploads against.
+        var trackTitles = page.Release?.Tracks.Select(rt => rt.TitleOverride ?? rt.Track.Title).ToList();
 
         return new EnrichmentRequest(
             page.TrackId is not null ? StreamingResultType.Track : StreamingResultType.Release,
@@ -154,7 +157,8 @@ public sealed class EfCatalogRepository(ApplicationDbContext dbContext, TimeProv
             artistName,
             page.Track?.Isrc,
             page.Release?.Upc,
-            [.. links.Select(link => new ProviderLinkCandidate(link.Platform.Code, link.ExternalId, link.ExternalUrl))]);
+            [.. links.Select(link => new ProviderLinkCandidate(link.Platform.Code, link.ExternalId, link.ExternalUrl))],
+            TrackTitles: trackTitles);
     }
 
     public async Task<IReadOnlyList<PlatformCheckResult>> SaveEnrichmentAsync(Guid sharePageId, ProviderEnrichment enrichment, CancellationToken cancellationToken)

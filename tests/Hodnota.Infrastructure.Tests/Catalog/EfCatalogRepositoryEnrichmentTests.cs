@@ -72,6 +72,42 @@ public class EfCatalogRepositoryEnrichmentTests
         request!.Type.Should().Be(StreamingResultType.Release);
         request.Upc.Should().Be("724385522925", "the stored form drops the extra leading zero");
         request.Isrc.Should().BeNull();
+        request.TrackTitles.Should().BeEmpty("no provider has supplied this release's tracklist yet");
+    }
+
+    [Fact]
+    public async Task GetEnrichmentRequestAsync_ForAReleasePageWithKnownTracks_ReturnsTheirTitles()
+    {
+        // YouTube's channel disambiguation (ADR 0018 D2/E10) needs the catalog's own track titles.
+        var (connection, context) = await CreateContextAsync();
+        await using var _ = connection;
+        await using var __ = context;
+        var repository = new EfCatalogRepository(context);
+        var album = new StreamingSearchResult(StreamingResultType.Release, "Ecce Lex", "Nostromo", null, [Link(PlatformCodes.Qobuz, "q1")]);
+        var page = await repository.ResolveSharePageAsync(album, CancellationToken.None);
+        var releaseId = await context.Releases.Select(r => r.Id).SingleAsync();
+        context.Tracks.AddRange(
+            new Track { Title = "Rude Awakening", Releases = [new ReleaseTrack { ReleaseId = releaseId, TrackNumber = 1 }] },
+            new Track { Title = "Turned Black", Releases = [new ReleaseTrack { ReleaseId = releaseId, TrackNumber = 2, TitleOverride = "Turned Black (Live)" }] });
+        await context.SaveChangesAsync();
+
+        var request = await repository.GetEnrichmentRequestAsync(page.Id, CancellationToken.None);
+
+        request!.TrackTitles.Should().BeEquivalentTo(["Rude Awakening", "Turned Black (Live)"], "a TitleOverride wins over the track's own title");
+    }
+
+    [Fact]
+    public async Task GetEnrichmentRequestAsync_ForATrackPage_TrackTitlesIsEmpty()
+    {
+        var (connection, context) = await CreateContextAsync();
+        await using var _ = connection;
+        await using var __ = context;
+        var repository = new EfCatalogRepository(context);
+        var page = await repository.ResolveSharePageAsync(SpotifyTrack(), CancellationToken.None);
+
+        var request = await repository.GetEnrichmentRequestAsync(page.Id, CancellationToken.None);
+
+        request!.TrackTitles.Should().BeNullOrEmpty();
     }
 
     [Fact]

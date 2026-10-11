@@ -309,6 +309,48 @@ describe('SharePage', () => {
     expect(screen.queryByText(/Content provided by/)).not.toBeInTheDocument();
   });
 
+  // ADR 0018 D2: an Album page's YouTube Music row can link to a verified track instead of the
+  // (unverifiable) album — resultType flags this so it's never shown as if it were the album.
+  it('labels a YouTube Music row as a track when the page itself is an album', async () => {
+    vi.mocked(getSharePage).mockResolvedValue(
+      page(
+        [
+          row({
+            platform: 'youtube-music',
+            url: 'https://music.youtube.com/watch?v=1',
+            resultType: 'Song',
+          }),
+        ],
+        { type: 'Album', name: 'Ecce Lex', artist: 'Nostromo' },
+      ),
+    );
+
+    renderAt('share-1');
+    await screen.findByText('Ecce Lex');
+
+    expect(screen.getByText('(track)')).toBeInTheDocument();
+  });
+
+  it('does not label a YouTube Music row when its resultType matches the page type', async () => {
+    vi.mocked(getSharePage).mockResolvedValue(
+      page(
+        [
+          row({
+            platform: 'youtube-music',
+            url: 'https://music.youtube.com/playlist?list=OLAK5uy_1',
+            resultType: 'Album',
+          }),
+        ],
+        { type: 'Album', name: 'Ecce Lex', artist: 'Nostromo' },
+      ),
+    );
+
+    renderAt('share-1');
+    await screen.findByText('Ecce Lex');
+
+    expect(screen.queryByText('(track)')).not.toBeInTheDocument();
+  });
+
   it('shows an error message when loading fails', async () => {
     vi.mocked(getSharePage).mockRejectedValue(
       new ApiError('Could not load the share page.', 404),

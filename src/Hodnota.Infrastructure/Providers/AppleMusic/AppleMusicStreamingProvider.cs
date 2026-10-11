@@ -29,7 +29,7 @@ public sealed class AppleMusicStreamingProvider(AppleMusicApiClient apiClient, A
     public Task<IReadOnlyList<StreamingSearchResult>> LookupAsync(StreamingLookupKey key, CancellationToken cancellationToken) =>
         throw new NotSupportedException();
 
-    public async Task<IReadOnlyList<StreamingSearchResult>> FindByNameAsync(string artistName, string name, StreamingResultType type, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<StreamingSearchResult>> FindByNameAsync(string artistName, string name, StreamingResultType type, IReadOnlyList<string> knownTrackTitles, CancellationToken cancellationToken)
     {
         var results = await SearchAsync($"{artistName} {name}", type, cancellationToken);
         return [.. results.Where(result => result.Type == type && SearchResultNameMatcher.IsSameItem(result, artistName, name))];

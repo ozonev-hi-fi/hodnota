@@ -61,7 +61,7 @@ public sealed class CatalogEnrichmentService(IEnumerable<IStreamingProvider> pro
         IEnumerable<StreamingSearchResult> found;
         if (provider is IStreamingNameLookup byName)
         {
-            found = await byName.FindByNameAsync(request.ArtistName, request.Name, request.Type, cancellationToken);
+            found = await byName.FindByNameAsync(request.ArtistName, request.Name, request.Type, request.TrackTitles ?? [], cancellationToken);
         }
         else if (canSearch)
         {
@@ -74,7 +74,12 @@ public sealed class CatalogEnrichmentService(IEnumerable<IStreamingProvider> pro
             return [];
         }
 
-        return [.. found.Where(result => result.Type == request.Type && result.Links.Count > 0)];
+        // A result of the requested type is always accepted; a YouTube Track result is also accepted
+        // for a Release request — the verified-track fallback for an unverified album (ADR 0018 D2).
+        bool AcceptableType(StreamingResultType resultType) => resultType == request.Type
+            || (provider.ProviderCode == ProviderCodes.YouTube && request.Type == StreamingResultType.Release && resultType == StreamingResultType.Track);
+
+        return [.. found.Where(result => AcceptableType(result.Type) && result.Links.Count > 0)];
     }
 
     private async Task<ProviderEnrichment> CheckAsync(IStreamingProvider provider, EnrichmentRequest request, StreamingLookupKey? key, CancellationToken cancellationToken)
