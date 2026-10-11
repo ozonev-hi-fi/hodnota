@@ -1,0 +1,35 @@
+# 0018. YouTube and YouTube Music: authenticity-based search, not raw search.list ranking
+
+Status: accepted
+
+## Context
+
+[youtube-music-search.md](../youtube-music-search.md) is a full research document covering why hodnota's YouTube search surfaces pirate uploads instead of the real official album or track: `search.list` ranks any upload by text relevance, anyone can title an upload "Artist - Album (Full Album)", and the official album playlists ("OLAK" ids, owned by the channel "YouTube") and artist "Topic" channels are never returned by `search.list` at all. That document is not restated here — see it for the full problem list (section 2), how YouTube organizes official content (section 3), the Data API's actual capabilities and quota (section 4), the "authenticity signal" table (section 6), and the proposed phased fix plan (section 10).
+
+That document named five decisions (D1–D5) as "the owner's to make," and two live experiments (E9, E10) as still needed before deciding. Both were run on 2026-10-11 on this branch; results are recorded in [youtube-music-search.md](../youtube-music-search.md) section 9. In short:
+
+- **E9** (search a known-correct "Artist - Topic" channel for the album title) found the real tracklist reliably — 25/25 results for both golden cases (*Ecce Lex* by Nostromo, *Load* by Metallica) were genuine tracks of that album, once the correct Topic channel id is already known.
+- **E10** (disambiguate among several channels that share the artist's name — RC8) confirmed the collision problem is real and severe (search found up to 25 colliding "Artist - Topic"-named channels per artist: other real artists, tribute/karaoke acts, podcasts, meme channels, and bands whose *song* happens to be called the same as the artist being searched for), but also found a reliable fix: sampling a handful of a candidate channel's own uploaded video titles and checking for overlap with the catalog's already-known track names correctly identifies the right channel. The distributor/label name alone is **not** sufficient — Metallica's own guitarist, Kirk Hammett, has a solo-album Topic channel distributed through the same label (Blackened Recordings) as Metallica itself, which would false-positive a label-only check.
+
+## Decision
+
+**D1 — keep YouTube in the search-results list**, but replace today's weak word-match filter (`SearchResultRelevanceFilter`) with an authenticity check on every row. This differs from the resolve-time check already in place (`SearchResultNameMatcher`, Phase 0): at *search* time there is no known "correct" artist yet to compare a candidate against — that's what the user is searching for — so the search-time check can only use signals intrinsic to the candidate itself: is it owned by an "Artist - Topic" channel, or an OLAK playlist owned by the channel "YouTube", with an auto-generated ("Provided to YouTube by...") description shape. The resolve-time check keeps its stronger form, since it already knows the catalog's real artist and title to compare against.
+
+**D2 — for an album with no verifiable OLAK playlist, show a verified Topic track, labelled as a track, never the full album, never a bare channel link.** E9/E10 confirm this is achievable even for an obscure artist: find a candidate "Artist - Topic" channel, confirm it's the right one by sampling its uploads against the catalog's known track names (not by label/distributor alone, per E10), then search within that confirmed channel for the album title to surface its real tracks (per E9).
+
+**D3 — never use YouTube Music's internal (InnerTube) API, not even dev-only.** It is the only route that reliably returns the exact official album id, but using it conflicts with YouTube's Developer Policies (undocumented-API and anti-scraping clauses) and puts the project's own Data API key at risk, not just a separate credential. This matches the project's existing stance of not shipping ToS-conflicting mechanisms to real users (cf. the Qobuz and Bandcamp decisions in `CLAUDE.local.md` / [decisions/0017](0017-bandcamp-no-catalog-search.md)).
+
+**D4 — no generic "search on YouTube Music" fallback row** when nothing passes the authenticity check. A link should point at a real, verified item or not exist at all; a pre-filled search URL is not an item and would be a step back toward showing something unverified.
+
+**D5 — don't request a larger `search.list` quota now.** This fix's whole point is to spend `search.list` more carefully (verification moves to the cheap, shared 10,000/day bucket via `channels.list`/`playlistItems.list`/`videos.list`), and whether Google would even grant an increase is unverified.
+
+**Rejected alternatives:** removing YouTube from the search list entirely (D1's original recommendation) — rejected because the owner preferred keeping a filtered YouTube row in search results over removing it outright, accepting the added complexity of a search-time-only intrinsic-signal check. Using a label/distributor match as the primary disambiguator for same-named channels (an idea section 6 and the original fix plan treated as plausible) — rejected by E10's Kirk Hammett/Blackened Recordings counterexample; it's kept only as a weak secondary signal.
+
+## Consequences
+
+- No code, test, or migration changes — this ADR decides direction only. The authenticity-scoring mechanism, the changes to `YouTubeStreamingProvider`/`SearchResultRelevanceFilter`/`SearchResultNameMatcher`, and the channel-disambiguation-by-track-overlap logic are a separate implementation plan, written against this ADR.
+- [roadmap.md](../roadmap.md)'s YouTube/YouTube Music line is reworded to link here and record that D1–D5 are decided; it stays unchecked until the fix is actually implemented.
+- [youtube-music-search.md](../youtube-music-search.md)'s `Status` line, section 9 (E9/E10 rows), and section 11 (decision column) are updated to point here instead of asking the owner.
+- [decisions/0014](0014-resolve-time-catalog-enrichment.md)'s description of `FindByNameAsync`/`SearchResultNameMatcher` is refined, not replaced, by this ADR: the resolve-time check stays as today's strong form; a new, separate search-time intrinsic check is added alongside it, not instead of it.
+- D2 (verified-track-only for an unverified album) means a share page for an album with no OLAK id will show a YouTube Music **track** row, not an album row, even though the item being shared is an album — a deliberate accuracy-over-completeness trade-off, consistent with "no link is better than a pirate link" (section 6).
+- D1's choice to keep search-time filtering adds ongoing complexity (two different authenticity checks, one intrinsic-only and one catalog-aware) that the rejected alternative (remove YouTube from search, resolve-time-only) would have avoided — accepted as the cost of keeping YouTube visible during search.
