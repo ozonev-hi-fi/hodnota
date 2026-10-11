@@ -81,7 +81,7 @@ Latest-stable-everything version policy; `hodnota.slnx` at repo root with one ce
 
 ### Purchase Platforms
 
-- Bandcamp
+- Bandcamp — no automated search/provider yet; blocked on the "paste a link" feature, see [decisions/0017](decisions/0017-bandcamp-no-catalog-search.md).
 
 ### Metadata Platforms
 

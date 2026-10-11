@@ -75,6 +75,7 @@ An idea moves to `roadmap.md` as one line once it's prioritized; an ADR entry sh
 
 **Open questions, for the ADR when this is picked up:**
 - Interface shape: `IStreamingProvider` has `SearchAsync` and `LookupAsync` (by ISRC/UPC) today, but nothing that takes a provider id directly — this needs a new member (or a new interface) plus one URL parser per provider.
+- A Bandcamp URL form isn't in the list below yet. [decisions/0017](decisions/0017-bandcamp-no-catalog-search.md) rules out any Bandcamp *search*, but leaves open whether this feature can read a single, user-pasted Bandcamp page without that counting as the scraping its terms prohibit — a question for whenever Bandcamp is added here, not decided yet.
 - Mapping a YouTube Music `MPREb_…` browse id (the id shown in the YT Music app/site URL) back to something the Data API can read.
 - How resolve is reached without a cached search candidate id — today `POST /api/catalog/resolve` only takes `{ id }` from `ISearchCandidateCache`.
 - Whether the YouTube `search.list` quota (point 9) needs a Google quota-extension request before this ships for real users.
