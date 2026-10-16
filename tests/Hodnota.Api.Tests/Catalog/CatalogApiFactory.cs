@@ -59,6 +59,8 @@ public sealed class CatalogApiFactory : WebApplicationFactory<Program>
 
     public CatalogApiFactory()
     {
+        TestDatabaseProvider.UseSqlite();
+
         _keepAliveConnection = new SqliteConnection(_connectionString);
         _keepAliveConnection.Open();
     }

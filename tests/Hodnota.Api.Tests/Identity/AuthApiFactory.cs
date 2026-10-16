@@ -30,6 +30,8 @@ public sealed class AuthApiFactory : WebApplicationFactory<Program>
 
     public AuthApiFactory()
     {
+        TestDatabaseProvider.UseSqlite();
+
         // Sync is fine: in-memory SQLite has no real I/O, and constructors can't be async anyway.
         _keepAliveConnection = new SqliteConnection(_connectionString);
         _keepAliveConnection.Open();

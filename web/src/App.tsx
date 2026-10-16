@@ -1,7 +1,9 @@
 import { Navigate, Route, Routes } from 'react-router';
 import RedirectIfAuthenticated from './auth/RedirectIfAuthenticated.tsx';
+import RequireAdmin from './auth/RequireAdmin.tsx';
 import RequireAuth from './auth/RequireAuth.tsx';
 import CenteredLayout from './layout/CenteredLayout.tsx';
+import AdminRefreshSettingsPage from './pages/AdminRefreshSettingsPage.tsx';
 import ChangePasswordPage from './pages/ChangePasswordPage.tsx';
 import ConfirmEmailPage from './pages/ConfirmEmailPage.tsx';
 import ForgotPasswordPage from './pages/ForgotPasswordPage.tsx';
@@ -28,6 +30,12 @@ function App() {
             path="/account/change-password"
             element={<ChangePasswordPage />}
           />
+          <Route element={<RequireAdmin />}>
+            <Route
+              path="/admin/refresh-settings"
+              element={<AdminRefreshSettingsPage />}
+            />
+          </Route>
         </Route>
         <Route path="/share/:id" element={<SharePage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
