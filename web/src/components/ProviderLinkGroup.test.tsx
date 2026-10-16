@@ -23,6 +23,7 @@ describe('ProviderLinkGroup', () => {
       <ProviderLinkGroup
         category="Listen"
         rows={[row({}), row({ platform: 'youtube-music' })]}
+        pageType="Song"
       />,
     );
 
@@ -32,7 +33,9 @@ describe('ProviderLinkGroup', () => {
   });
 
   it('shows a found link as its URL and opens it in a new tab', () => {
-    render(<ProviderLinkGroup category="Listen" rows={[row({})]} />);
+    render(
+      <ProviderLinkGroup category="Listen" rows={[row({})]} pageType="Song" />,
+    );
 
     const link = within(rowOf('YouTube')).getByRole('link', {
       name: 'https://www.youtube.com/watch?v=1',
@@ -47,6 +50,7 @@ describe('ProviderLinkGroup', () => {
       <ProviderLinkGroup
         category="Listen"
         rows={[row({ platform: 'tidal', state: 'Checking', url: null })]}
+        pageType="Song"
       />,
     );
 
@@ -66,6 +70,7 @@ describe('ProviderLinkGroup', () => {
             url: 'https://tidal.com/browse/album/9',
           }),
         ]}
+        pageType="Song"
       />,
     );
 
@@ -82,6 +87,7 @@ describe('ProviderLinkGroup', () => {
       <ProviderLinkGroup
         category="Listen"
         rows={[row({ platform: 'qobuz', state: 'NotFound', url: null })]}
+        pageType="Song"
       />,
     );
 
@@ -94,6 +100,7 @@ describe('ProviderLinkGroup', () => {
       <ProviderLinkGroup
         category="Listen"
         rows={[row({ platform: 'qobuz', state: 'Failed', url: null })]}
+        pageType="Song"
       />,
     );
 
@@ -104,9 +111,43 @@ describe('ProviderLinkGroup', () => {
 
   it('renders nothing when there are no rows', () => {
     const { container } = render(
-      <ProviderLinkGroup category="Discover" rows={[]} />,
+      <ProviderLinkGroup category="Discover" rows={[]} pageType="Song" />,
     );
 
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it('labels a row as a track when its resultType differs from the page type', () => {
+    render(
+      <ProviderLinkGroup
+        category="Listen"
+        rows={[row({ platform: 'youtube-music', resultType: 'Song' })]}
+        pageType="Album"
+      />,
+    );
+
+    expect(
+      within(rowOf('YouTube Music')).getByText('(track)'),
+    ).toBeInTheDocument();
+  });
+
+  it('does not show a track label when resultType matches the page type', () => {
+    render(
+      <ProviderLinkGroup
+        category="Listen"
+        rows={[row({ platform: 'youtube-music', resultType: 'Album' })]}
+        pageType="Album"
+      />,
+    );
+
+    expect(within(rowOf('YouTube Music')).queryByText('(track)')).toBeNull();
+  });
+
+  it('does not show a track label when resultType is absent', () => {
+    render(
+      <ProviderLinkGroup category="Listen" rows={[row({})]} pageType="Album" />,
+    );
+
+    expect(within(rowOf('YouTube')).queryByText('(track)')).toBeNull();
   });
 });

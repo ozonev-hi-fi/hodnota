@@ -39,7 +39,7 @@ public class AppleMusicStreamingProviderNameLookupTests
             """;
         var provider = NewProvider(json);
 
-        var results = await provider.FindByNameAsync("Metallica", "Enter Sandman", StreamingResultType.Track, CancellationToken.None);
+        var results = await provider.FindByNameAsync("Metallica", "Enter Sandman", StreamingResultType.Track, [], CancellationToken.None);
 
         results.Should().ContainSingle().Which.Links.Single().ExternalId.Should().Be("1");
     }
@@ -56,7 +56,7 @@ public class AppleMusicStreamingProviderNameLookupTests
             """;
         var provider = NewProvider(json);
 
-        var results = await provider.FindByNameAsync("Metallica", "Enter Sandman", StreamingResultType.Track, CancellationToken.None);
+        var results = await provider.FindByNameAsync("Metallica", "Enter Sandman", StreamingResultType.Track, [], CancellationToken.None);
 
         results.Should().BeEmpty();
     }
@@ -73,7 +73,7 @@ public class AppleMusicStreamingProviderNameLookupTests
             """;
         var provider = NewProvider(json);
 
-        var results = await provider.FindByNameAsync("Metallica", "Enter Sandman", StreamingResultType.Track, CancellationToken.None);
+        var results = await provider.FindByNameAsync("Metallica", "Enter Sandman", StreamingResultType.Track, [], CancellationToken.None);
 
         results.Should().BeEmpty();
     }

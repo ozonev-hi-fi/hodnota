@@ -150,6 +150,7 @@ function SharePage() {
           key={category}
           category={category}
           rows={rowsByCategory[category]}
+          pageType={sharePage.type}
         />
       ))}
       {discogsLink && (

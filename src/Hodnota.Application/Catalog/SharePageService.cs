@@ -98,7 +98,7 @@ public sealed class SharePageService(
 
             foreach (var result in update.Where(result => typesByCode.ContainsKey(result.PlatformCode)))
             {
-                var row = ToRow(result, typesByCode[result.PlatformCode], linkUrlByCode.GetValueOrDefault(result.PlatformCode));
+                var row = ToRow(result, typesByCode[result.PlatformCode], linkUrlByCode.GetValueOrDefault(result.PlatformCode), page.Type);
                 if (!sent.TryGetValue(row.PlatformCode, out var previous) || previous != row)
                 {
                     sent[row.PlatformCode] = row;
@@ -150,19 +150,19 @@ public sealed class SharePageService(
             var linkUrl = page.Links.FirstOrDefault(link => link.PlatformCode == code)?.Url;
             rows.Add(check is null || beingChecked.Contains(code)
                 ? new PlatformRow(code, types[code], PlatformRowState.Checking, null)
-                : ToRow(check, types[code], linkUrl));
+                : ToRow(check, types[code], linkUrl, page.Type));
         }
 
         // A link whose provider is not running now (for example a dormant Spotify) stays on the page.
         rows.AddRange(page.Links
             .Where(link => !expected.Contains(link.PlatformCode))
-            .Select(link => new PlatformRow(link.PlatformCode, link.PlatformType, PlatformRowState.Found, link.Url)));
+            .Select(link => new PlatformRow(link.PlatformCode, link.PlatformType, PlatformRowState.Found, link.Url, DeriveResultType(page.Type, link.PlatformCode, link.Url))));
 
         return new SharePageView(page, rows, rows.All(row => row.State != PlatformRowState.Checking));
     }
 
     // A found result whose link is not visible on the page (the owner hid it) shows as not found.
-    private static PlatformRow ToRow(PlatformCheckResult check, PlatformType type, Uri? linkUrl)
+    private static PlatformRow ToRow(PlatformCheckResult check, PlatformType type, Uri? linkUrl, StreamingResultType pageType)
     {
         var state = check.Outcome switch
         {
@@ -172,6 +172,17 @@ public sealed class SharePageService(
             _ => PlatformRowState.NotFound,
         };
 
-        return new PlatformRow(check.PlatformCode, type, state, state == PlatformRowState.NotFound ? null : linkUrl);
+        var url = state == PlatformRowState.NotFound ? null : linkUrl;
+        return new PlatformRow(check.PlatformCode, type, state, url, DeriveResultType(pageType, check.PlatformCode, url));
     }
+
+    internal const string YouTubePlatformCode = "youtube";
+    internal const string YouTubeMusicPlatformCode = "youtube-music";
+
+    private static StreamingResultType? DeriveResultType(StreamingResultType pageType, string platformCode, Uri? url) =>
+        pageType == StreamingResultType.Release
+        && (platformCode == YouTubePlatformCode || platformCode == YouTubeMusicPlatformCode)
+        && url is { AbsolutePath: "/watch" }
+            ? StreamingResultType.Track
+            : null;
 }

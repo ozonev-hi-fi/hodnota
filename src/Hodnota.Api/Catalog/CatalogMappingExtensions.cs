@@ -29,7 +29,8 @@ public static class CatalogMappingExtensions
         row.PlatformCode,
         row.PlatformType.ToContractType(),
         row.State.ToContractState(),
-        row.Url);
+        row.Url,
+        row.ResultType?.ToCandidateType());
 
     private static ContractRowState ToContractState(this ApplicationRowState state) => state switch
     {

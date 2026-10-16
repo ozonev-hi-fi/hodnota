@@ -26,6 +26,9 @@ public class SharePageServiceTests
     private static SharePageResult Page(params SharePageLinkResult[] links) =>
         new(PageId, StreamingResultType.Track, "Nothing Else Matters", "Metallica", links);
 
+    private static SharePageResult AlbumPage(params SharePageLinkResult[] links) =>
+        new(PageId, StreamingResultType.Release, "Ecce Lex", "Nostromo", links);
+
     private static SharePageLinkResult PageLink(string platformCode, Uri url) => new(platformCode, url, PlatformType.StreamingService);
 
     private static IStreamingProvider NewProvider(string providerCode, bool supportsTracks = true)
@@ -278,6 +281,63 @@ public class SharePageServiceTests
         var view = await fixture.Service.GetAsync(PageId, CancellationToken.None);
 
         view!.Rows.Select(r => (r.PlatformCode, r.State)).Should().Equal(("qobuz", PlatformRowState.Checking), ("spotify", PlatformRowState.Found));
+    }
+
+    [Fact]
+    public async Task GetAsync_StoredYouTubeMusicTrackLinkFromADormantProviderOnAnAlbumPage_HasResultTypeTrack()
+    {
+        var trackUrl = new Uri("https://music.youtube.com/watch?v=v1");
+        var fixture = new Fixture(AlbumPage(PageLink("youtube-music", trackUrl)), []);
+
+        var view = await fixture.Service.GetAsync(PageId, CancellationToken.None);
+
+        view!.Rows.Single().ResultType.Should().Be(StreamingResultType.Track);
+    }
+
+    // ADR 0018 D2: an unverified album's YouTube Music row can link to a verified track instead of
+    // the album — detected purely from the stored URL shape (/watch vs /playlist), no extra state.
+    [Fact]
+    public async Task GetAsync_YouTubeMusicTrackLinkOnAnAlbumPage_HasResultTypeTrack()
+    {
+        var trackUrl = new Uri("https://music.youtube.com/watch?v=v1");
+        var fixture = new Fixture(
+            AlbumPage(PageLink("youtube-music", trackUrl)),
+            [Check("youtube-music", LookupOutcome.NameMatch)],
+            NewProvider("youtube-music"));
+
+        var view = await fixture.Service.GetAsync(PageId, CancellationToken.None);
+
+        view!.Rows.Single().ResultType.Should().Be(StreamingResultType.Track);
+    }
+
+    [Fact]
+    public async Task GetAsync_YouTubeMusicAlbumPlaylistLinkOnAnAlbumPage_HasNoResultTypeOverride()
+    {
+        var albumUrl = new Uri("https://music.youtube.com/playlist?list=OLAK5uy_x");
+        var fixture = new Fixture(
+            AlbumPage(PageLink("youtube-music", albumUrl)),
+            [Check("youtube-music", LookupOutcome.ExactMatch)],
+            NewProvider("youtube-music"));
+
+        var view = await fixture.Service.GetAsync(PageId, CancellationToken.None);
+
+        view!.Rows.Single().ResultType.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetAsync_YouTubeMusicTrackLinkOnATrackPage_HasNoResultTypeOverride()
+    {
+        // The page is already a Track page, so there's nothing to flag — resultType is only for
+        // the album-shown-as-track substitution.
+        var trackUrl = new Uri("https://music.youtube.com/watch?v=v1");
+        var fixture = new Fixture(
+            Page(PageLink("youtube-music", trackUrl)),
+            [Check("youtube-music", LookupOutcome.ExactMatch)],
+            NewProvider("youtube-music"));
+
+        var view = await fixture.Service.GetAsync(PageId, CancellationToken.None);
+
+        view!.Rows.Single().ResultType.Should().BeNull();
     }
 
     [Fact]

@@ -36,8 +36,8 @@ public class CatalogEnrichmentServiceTests
     private static EnrichmentRequest TrackRequest(string? isrc = Isrc, IReadOnlySet<string>? only = null, params ProviderLinkCandidate[] existing) =>
         new(StreamingResultType.Track, "Song", "Artist", isrc, null, existing, only);
 
-    private static EnrichmentRequest AlbumRequest(string? upc = Upc, params ProviderLinkCandidate[] existing) =>
-        new(StreamingResultType.Release, "Album", "Artist", null, upc, existing);
+    private static EnrichmentRequest AlbumRequest(string? upc = Upc, IReadOnlyList<string>? trackTitles = null, params ProviderLinkCandidate[] existing) =>
+        new(StreamingResultType.Release, "Album", "Artist", null, upc, existing, TrackTitles: trackTitles);
 
     private static async Task<List<ProviderEnrichment>> RunAsync(EnrichmentRequest request, params IStreamingProvider[] providers)
     {
@@ -240,7 +240,7 @@ public class CatalogEnrichmentServiceTests
     {
         var youTube = NewNameLookupProvider("youtube");
         var link = Link("youtube", "PL1");
-        ((IStreamingNameLookup)youTube).FindByNameAsync("Artist", "Album", StreamingResultType.Release, Arg.Any<CancellationToken>())
+        ((IStreamingNameLookup)youTube).FindByNameAsync("Artist", "Album", StreamingResultType.Release, Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
             .Returns([Result("Artist - Album (Full Album)", StreamingResultType.Release, link)]);
 
         var results = await RunAsync(AlbumRequest(), youTube);
@@ -261,14 +261,14 @@ public class CatalogEnrichmentServiceTests
 
         results.Single().Outcome.Should().Be(LookupOutcome.NameMatch);
         results.Single().Links.Should().Equal(existing);
-        await ((IStreamingNameLookup)youTube).DidNotReceiveWithAnyArgs().FindByNameAsync(default!, default!, default, default);
+        await ((IStreamingNameLookup)youTube).DidNotReceiveWithAnyArgs().FindByNameAsync(default!, default!, default, default!, default);
     }
 
     [Fact]
     public async Task EnrichAsync_ProviderFoundByNameOnly_NothingMatches_IsNotFound()
     {
         var youTube = NewNameLookupProvider("youtube");
-        ((IStreamingNameLookup)youTube).FindByNameAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<StreamingResultType>(), Arg.Any<CancellationToken>())
+        ((IStreamingNameLookup)youTube).FindByNameAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<StreamingResultType>(), Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
             .Returns([]);
 
         var results = await RunAsync(AlbumRequest(), youTube);
@@ -280,12 +280,54 @@ public class CatalogEnrichmentServiceTests
     public async Task EnrichAsync_ProviderFoundByNameOnly_SearchFails_IsFailed()
     {
         var youTube = NewNameLookupProvider("youtube");
-        ((IStreamingNameLookup)youTube).FindByNameAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<StreamingResultType>(), Arg.Any<CancellationToken>())
+        ((IStreamingNameLookup)youTube).FindByNameAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<StreamingResultType>(), Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new StreamingProviderException("quota", new InvalidOperationException()));
 
         var results = await RunAsync(AlbumRequest(), youTube);
 
         results.Single().Outcome.Should().Be(LookupOutcome.Failed);
+    }
+
+    [Fact]
+    public async Task EnrichAsync_ReleaseRequest_PassesTheKnownTrackTitlesToFindByName()
+    {
+        var youTube = NewNameLookupProvider("youtube");
+        ((IStreamingNameLookup)youTube).FindByNameAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<StreamingResultType>(), Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
+            .Returns([]);
+
+        await RunAsync(AlbumRequest(trackTitles: ["Ecce Lex", "Rude Awakening"]), youTube);
+
+        var expectedTitles = new[] { "Ecce Lex", "Rude Awakening" };
+        await ((IStreamingNameLookup)youTube).Received().FindByNameAsync(
+            "Artist", "Album", StreamingResultType.Release, Arg.Is<IReadOnlyList<string>>(titles => titles.SequenceEqual(expectedTitles)), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task EnrichAsync_YouTubeTrackResultForAReleaseRequest_IsAccepted_ADR0018D2Fallback()
+    {
+        var youTube = NewNameLookupProvider("youtube");
+        var link = Link("youtube", "v-ecce-lex");
+        ((IStreamingNameLookup)youTube).FindByNameAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<StreamingResultType>(), Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
+            .Returns([Result("Ecce Lex", StreamingResultType.Track, link)]);
+
+        var results = await RunAsync(AlbumRequest(), youTube);
+
+        results.Single().Outcome.Should().Be(LookupOutcome.NameMatch);
+        results.Single().Links.Should().Equal(link);
+    }
+
+    [Fact]
+    public async Task EnrichAsync_ANonYouTubeTrackResultForAReleaseRequest_IsStillRejected()
+    {
+        // The relaxed type filter is YouTube's own D2 fallback, not a general rule — any other
+        // provider's Track result must still be ignored for a Release request.
+        var tidal = NewNameLookupProvider("tidal");
+        ((IStreamingNameLookup)tidal).FindByNameAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<StreamingResultType>(), Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
+            .Returns([Result("Ecce Lex", StreamingResultType.Track, Link("tidal", "t1"))]);
+
+        var results = await RunAsync(AlbumRequest(), tidal);
+
+        results.Single().Outcome.Should().Be(LookupOutcome.NotFound);
     }
 
     [Fact]

@@ -83,6 +83,8 @@ public static class DependencyInjection
                 : new YouTubeService(new BaseClientService.Initializer { ApiKey = apiKey, ApplicationName = "Hodnota" });
         });
         services.AddSingleton<ISearchCandidateCache, MemorySearchCandidateCache>();
+        services.AddSingleton<IYouTubeApiClient, YouTubeApiClient>();
+        services.AddSingleton<YouTubeChannelResolver>();
         services.AddScoped<IStreamingProvider, YouTubeStreamingProvider>();
 
         // Deferred into the factory delegate, not evaluated here directly, for the same reason

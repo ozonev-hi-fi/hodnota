@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Text.Json.Serialization;
 
 namespace Hodnota.Contracts.Catalog;
@@ -22,7 +23,12 @@ public enum PlatformRowState
     Failed,
 }
 
-public sealed record PlatformRowResponse(string Platform, PlatformType Type, PlatformRowState State, Uri? Url);
+public sealed record PlatformRowResponse(
+    string Platform,
+    PlatformType Type,
+    PlatformRowState State,
+    Uri? Url,
+    [property: Description("The linked item's type, set only when it differs from the share page's own type.")] CandidateType? ResultType = null);
 
 public sealed record SharePageResponse(
     Guid Id,
