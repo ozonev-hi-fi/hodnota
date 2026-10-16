@@ -307,6 +307,93 @@ public sealed class EfCatalogRepository(ApplicationDbContext dbContext, TimeProv
         return [.. outcomes.Select(pair => new PlatformCheckResult(pair.Key, pair.Value))];
     }
 
+    public async Task<IReadOnlyList<DueRefreshCandidate>> GetDueProviderChecksAsync(
+        IReadOnlyList<string> platformCodes, TimeSpan notFoundInterval, TimeSpan foundInterval, int batchSize, CancellationToken cancellationToken)
+    {
+        var now = _clock.GetUtcNow();
+        var notFoundCutoff = now - notFoundInterval;
+        var foundCutoff = now - foundInterval;
+
+        var duePlatformIds = await dbContext.Platforms.AsNoTracking()
+            .Where(p => platformCodes.Contains(p.Code))
+            .Select(p => p.Id)
+            .ToListAsync(cancellationToken);
+
+        // Filtered by platform only in SQL, then by Outcome/CheckedAtUtc client-side: EF's SQLite
+        // provider can't translate a Where predicate on this HasConversion<string> enum property
+        // (confirmed by a failing test — it emits an invalid "(int)Outcome" cast), and this method runs
+        // against whichever provider is configured — Postgres in production, SQLite in tests — so the
+        // client-side filter applies to both rather than branching per provider. GetPlatformChecksAsync
+        // above avoids the same trap the same way, for the same property. This loads every check row for
+        // the in-scope platforms before filtering/batching — accepted at today's catalog scale; revisit
+        // (e.g. split into two single-Outcome, SQL-translatable queries) if it ever grows large enough
+        // to matter.
+        var checks = await dbContext.ProviderChecks.AsNoTracking()
+            .Where(pc => duePlatformIds.Contains(pc.PlatformId))
+            .Select(pc => new { pc.ArtistId, pc.ReleaseId, pc.TrackId, pc.Outcome, PlatformCode = pc.Platform.Code, pc.CheckedAtUtc })
+            .ToListAsync(cancellationToken);
+
+        var dueChecks = checks
+            .Where(pc =>
+                ((pc.Outcome is LookupOutcome.NotFound or LookupOutcome.Failed) && pc.CheckedAtUtc < notFoundCutoff) ||
+                ((pc.Outcome is LookupOutcome.ExactMatch or LookupOutcome.NameMatch) && pc.CheckedAtUtc < foundCutoff))
+            .OrderBy(pc => pc.CheckedAtUtc)
+            .Take(batchSize)
+            .ToList();
+
+        if (dueChecks.Count == 0)
+        {
+            return [];
+        }
+
+        // One round trip for the whole batch instead of one SharePages query per due check.
+        var artistIds = dueChecks.Where(c => c.ArtistId is not null).Select(c => c.ArtistId!.Value).ToList();
+        var releaseIds = dueChecks.Where(c => c.ReleaseId is not null).Select(c => c.ReleaseId!.Value).ToList();
+        var trackIds = dueChecks.Where(c => c.TrackId is not null).Select(c => c.TrackId!.Value).ToList();
+
+        var candidatePages = await dbContext.SharePages.AsNoTracking()
+            .Where(sp =>
+                (sp.ArtistId != null && artistIds.Contains(sp.ArtistId.Value)) ||
+                (sp.ReleaseId != null && releaseIds.Contains(sp.ReleaseId.Value)) ||
+                (sp.TrackId != null && trackIds.Contains(sp.TrackId.Value)))
+            .Select(sp => new { sp.Id, sp.ArtistId, sp.ReleaseId, sp.TrackId, sp.CreatedAtUtc })
+            .ToListAsync(cancellationToken);
+
+        var candidates = new List<DueRefreshCandidate>(dueChecks.Count);
+        foreach (var check in dueChecks)
+        {
+            // Oldest page first, matching FindOrCreateSharePageAsync's own tie-break, for the rare case
+            // of more than one share page per entity (from before "one page per item" was the rule).
+            // No matching page means an orphaned ProviderCheck (a SharePage its entity once had is gone)
+            // — nothing in this codebase deletes a SharePage today, so this is not reachable in practice;
+            // skipped rather than guessed at if that ever changes.
+            var page = candidatePages
+                .Where(sp => sp.ArtistId == check.ArtistId && sp.ReleaseId == check.ReleaseId && sp.TrackId == check.TrackId)
+                .OrderBy(sp => sp.CreatedAtUtc)
+                .FirstOrDefault();
+            if (page is not null)
+            {
+                candidates.Add(new DueRefreshCandidate(page.Id, check.PlatformCode));
+            }
+        }
+
+        return candidates;
+    }
+
+    public Task<RefreshIntervals> GetRefreshIntervalsAsync(CancellationToken cancellationToken) =>
+        dbContext.RefreshSettings.AsNoTracking()
+            .OrderBy(s => s.Id)
+            .Select(s => new RefreshIntervals(s.NotFoundRecheckIntervalDays, s.FoundRecheckIntervalDays))
+            .FirstAsync(cancellationToken);
+
+    public async Task UpdateRefreshIntervalsAsync(RefreshIntervals intervals, CancellationToken cancellationToken)
+    {
+        var settings = await dbContext.RefreshSettings.OrderBy(s => s.Id).FirstAsync(cancellationToken);
+        settings.NotFoundRecheckIntervalDays = intervals.NotFoundRecheckIntervalDays;
+        settings.FoundRecheckIntervalDays = intervals.FoundRecheckIntervalDays;
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
     private async Task<(Guid? TrackId, Guid? ReleaseId)?> FindTargetAsync(Guid sharePageId, CancellationToken cancellationToken)
     {
         var page = await dbContext.SharePages.AsNoTracking()

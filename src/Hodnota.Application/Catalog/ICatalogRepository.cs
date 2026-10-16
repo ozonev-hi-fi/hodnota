@@ -20,4 +20,11 @@ public interface ICatalogRepository
     Task<EnrichmentRequest?> GetEnrichmentRequestAsync(Guid sharePageId, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<PlatformCheckResult>> SaveEnrichmentAsync(Guid sharePageId, ProviderEnrichment enrichment, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<DueRefreshCandidate>> GetDueProviderChecksAsync(
+        IReadOnlyList<string> platformCodes, TimeSpan notFoundInterval, TimeSpan foundInterval, int batchSize, CancellationToken cancellationToken);
+
+    Task<RefreshIntervals> GetRefreshIntervalsAsync(CancellationToken cancellationToken);
+
+    Task UpdateRefreshIntervalsAsync(RefreshIntervals intervals, CancellationToken cancellationToken);
 }

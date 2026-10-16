@@ -1,13 +1,19 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { checkAdminAccess } from '../api/adminSettings.ts';
 import { AuthProvider, useAuth } from './AuthContext.tsx';
 import { clearTokens, setTokens } from './tokenStorage.ts';
 
+vi.mock('../api/adminSettings.ts', () => ({
+  checkAdminAccess: vi.fn(),
+}));
+
 function StatusProbe() {
-  const { status, logout } = useAuth();
+  const { status, isAdmin, isAdminLoading, logout } = useAuth();
   return (
     <div>
       <span>{status}</span>
+      <span>{isAdminLoading ? 'admin-loading' : `isAdmin:${isAdmin}`}</span>
       <button type="button" onClick={logout}>
         Logout
       </button>
@@ -16,6 +22,10 @@ function StatusProbe() {
 }
 
 describe('AuthContext', () => {
+  beforeEach(() => {
+    vi.mocked(checkAdminAccess).mockResolvedValue(false);
+  });
+
   afterEach(() => {
     clearTokens();
   });
@@ -69,5 +79,34 @@ describe('AuthContext', () => {
     });
 
     expect(screen.getByText('unauthenticated')).toBeInTheDocument();
+  });
+
+  it('checks admin access when becoming authenticated and exposes the result', async () => {
+    vi.mocked(checkAdminAccess).mockResolvedValue(true);
+    setTokens('access-1', 'refresh-1');
+
+    render(
+      <AuthProvider>
+        <StatusProbe />
+      </AuthProvider>,
+    );
+
+    expect(await screen.findByText('isAdmin:true')).toBeInTheDocument();
+  });
+
+  it('resets isAdmin to false once unauthenticated', async () => {
+    vi.mocked(checkAdminAccess).mockResolvedValue(true);
+    setTokens('access-1', 'refresh-1');
+
+    render(
+      <AuthProvider>
+        <StatusProbe />
+      </AuthProvider>,
+    );
+    await screen.findByText('isAdmin:true');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Logout' }));
+
+    expect(screen.getByText('isAdmin:false')).toBeInTheDocument();
   });
 });

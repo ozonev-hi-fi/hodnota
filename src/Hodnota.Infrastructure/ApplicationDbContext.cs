@@ -37,6 +37,8 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
 
     public DbSet<SharePageLink> SharePageLinks => Set<SharePageLink>();
 
+    public DbSet<RefreshSettings> RefreshSettings => Set<RefreshSettings>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);

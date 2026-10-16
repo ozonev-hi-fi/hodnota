@@ -449,6 +449,39 @@ namespace Hodnota.Infrastructure.Migrations
                     b.ToTable("RecordLabels");
                 });
 
+            modelBuilder.Entity("Hodnota.Domain.Catalog.RefreshSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("FoundRecheckIntervalDays")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("NotFoundRecheckIntervalDays")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("RefreshSettings");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("00000000-0000-0000-0000-00000000a001"),
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 10, 16, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            FoundRecheckIntervalDays = 90,
+                            NotFoundRecheckIntervalDays = 7,
+                            UpdatedAtUtc = new DateTimeOffset(new DateTime(2026, 10, 16, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                        });
+                });
+
             modelBuilder.Entity("Hodnota.Domain.Catalog.Release", b =>
                 {
                     b.Property<Guid>("Id")

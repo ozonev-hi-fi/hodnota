@@ -5,6 +5,7 @@ import {
   useEffect,
   useState,
 } from 'react';
+import { checkAdminAccess } from '../api/adminSettings.ts';
 import * as identity from '../api/identity.ts';
 import {
   clearTokens,
@@ -16,6 +17,8 @@ type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
 
 interface AuthContextValue {
   status: AuthStatus;
+  isAdmin: boolean;
+  isAdminLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
   logout: () => void;
@@ -42,11 +45,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>(() =>
     getAccessToken() ? 'authenticated' : 'unauthenticated',
   );
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAdminLoading, setIsAdminLoading] = useState(
+    status === 'authenticated',
+  );
 
   // api/client.ts clears tokens directly (not through this file) when a token refresh fails —
   // without this, `status` would stay stuck at "authenticated" after a session has actually
   // died, and the route guards would never redirect to /login.
   useEffect(() => onTokensCleared(() => setStatus('unauthenticated')), []);
+
+  // Re-checked on every transition into "authenticated" (page load with a stored token, or a
+  // fresh login) — there is no role claim to read locally, so this is the only way to know
+  // (see api/adminSettings.ts's checkAdminAccess for why).
+  useEffect(() => {
+    if (status !== 'authenticated') {
+      setIsAdmin(false);
+      setIsAdminLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsAdminLoading(true);
+    checkAdminAccess().then((admin) => {
+      if (!cancelled) {
+        setIsAdmin(admin);
+        setIsAdminLoading(false);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [status]);
 
   async function login(email: string, password: string) {
     await identity.login(email, password);
@@ -60,6 +90,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value: AuthContextValue = {
     status,
+    isAdmin,
+    isAdminLoading,
     login,
     register: identity.register,
     logout,
