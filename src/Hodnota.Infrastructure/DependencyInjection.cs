@@ -19,6 +19,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
+using Quartz;
+
 namespace Hodnota.Infrastructure;
 
 public static class DependencyInjection
@@ -63,7 +65,7 @@ public static class DependencyInjection
             .AddRoles<IdentityRole<Guid>>()
             .AddEntityFrameworkStores<ApplicationDbContext>();
 
-        services.AddAuthorization();
+        services.AddAuthorizationBuilder().AddPolicy(AdminConfiguration.RoleName, p => p.RequireRole(AdminConfiguration.RoleName));
         services.AddSingleton<IEmailSender<ApplicationUser>, NoOpEmailSender>();
 
         return services;
@@ -195,12 +197,53 @@ public static class DependencyInjection
         services.AddSingleton<IShareEventHub, ShareEventHub>();
         services.AddHostedService<EnrichmentWorker>();
 
+        services.AddSingleton<IRefreshSettingsCache, RefreshSettingsCache>();
+        AddScheduledRefresh(services, configuration);
+
         services.AddScoped<ICatalogRepository, EfCatalogRepository>();
         services.AddScoped<CatalogSearchService>();
         services.AddScoped<CatalogEnrichmentService>();
         services.AddScoped<SharePageService>();
 
         return services;
+    }
+
+    // Read here, not in a deferred factory like the provider credentials above: Quartz picks its job
+    // store through the registrations AddQuartz makes, so the choice can't wait for Build(). Test hosts
+    // therefore set Database:Provider as an environment variable (TestDatabaseProvider), because
+    // ConfigureAppConfiguration only applies at Build().
+    private static void AddScheduledRefresh(IServiceCollection services, IConfiguration configuration)
+    {
+        var provider = configuration[DatabaseConfiguration.ProviderConfigKey];
+        var connectionString = configuration.GetConnectionString(DatabaseConfiguration.ConnectionStringName);
+
+        services.AddQuartz(q =>
+        {
+            if (DatabaseConfiguration.IsPostgres(provider) && !string.IsNullOrEmpty(connectionString))
+            {
+                q.UsePersistentStore(store =>
+                {
+                    store.UsePostgres(connectionString);
+                    store.ConfigureStore(storeOptions =>
+                    {
+                        storeOptions.TablePrefix = "QRTZ_";
+                        storeOptions.StoreJobDataAsStrings = true;
+                    });
+                    store.UseSystemTextJsonSerializer();
+                    store.ProvisionSchema();
+                });
+            }
+
+            var jobKey = new JobKey(nameof(ScheduledRefreshJob));
+            q.AddJob<ScheduledRefreshJob>(opts => opts.WithIdentity(jobKey));
+            // A cron time, not "an hour from now": Quartz replaces a stored trigger with this one on
+            // every boot, so a start time relative to boot would keep moving with each restart.
+            q.AddTrigger(opts => opts
+                .ForJob(jobKey)
+                .WithIdentity($"{nameof(ScheduledRefreshJob)}-trigger")
+                .WithCronSchedule("0 0 * * * ?"));
+        });
+        services.AddQuartzHostedService(options => options.WaitForJobsToComplete = true);
     }
 
     private static void ConfigureProvider(DbContextOptionsBuilder options, string provider, string connectionString)

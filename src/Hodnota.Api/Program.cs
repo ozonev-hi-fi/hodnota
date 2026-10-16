@@ -6,7 +6,9 @@ using Hodnota.Infrastructure.Identity;
 using Hodnota.Infrastructure.Providers.Discogs;
 using Hodnota.Infrastructure.Providers.Tidal;
 
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 using Scalar.AspNetCore;
 
@@ -37,6 +39,8 @@ await using (var scope = app.Services.CreateAsyncScope())
     _ = scope.ServiceProvider.GetRequiredService<YouTubeService>();
     _ = scope.ServiceProvider.GetRequiredService<DiscogsCredentials>();
     _ = scope.ServiceProvider.GetRequiredService<TidalCredentials>();
+
+    await SeedAdminRoleAsync(scope.ServiceProvider, app.Configuration);
 }
 
 app.UseAuthentication();
@@ -52,3 +56,40 @@ app.MapGroup("/api/auth").MapIdentityApi<ApplicationUser>();
 app.MapControllers();
 
 await app.RunAsync();
+
+static async Task SeedAdminRoleAsync(IServiceProvider services, IConfiguration configuration)
+{
+    var adminEmail = configuration[AdminConfiguration.EmailConfigKey];
+    if (string.IsNullOrEmpty(adminEmail))
+    {
+        return;
+    }
+
+    var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
+    var user = await userManager.FindByEmailAsync(adminEmail);
+    if (user is null)
+    {
+        return;
+    }
+
+    var roleManager = services.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
+    if (!await roleManager.RoleExistsAsync(AdminConfiguration.RoleName))
+    {
+        ThrowIfFailed(await roleManager.CreateAsync(new IdentityRole<Guid>(AdminConfiguration.RoleName)), $"Creating the '{AdminConfiguration.RoleName}' role failed");
+    }
+
+    if (!await userManager.IsInRoleAsync(user, AdminConfiguration.RoleName))
+    {
+        ThrowIfFailed(await userManager.AddToRoleAsync(user, AdminConfiguration.RoleName), $"Assigning the '{AdminConfiguration.RoleName}' role to {adminEmail} failed");
+    }
+}
+
+// Identity reports these failures as a result, not an exception — unchecked, startup would carry on
+// and the admin would only ever see a 403.
+static void ThrowIfFailed(IdentityResult result, string what)
+{
+    if (!result.Succeeded)
+    {
+        throw new InvalidOperationException($"{what}: {string.Join("; ", result.Errors.Select(error => $"{error.Code}: {error.Description}"))}");
+    }
+}
