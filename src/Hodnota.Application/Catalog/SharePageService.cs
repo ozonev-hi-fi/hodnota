@@ -176,14 +176,9 @@ public sealed class SharePageService(
         return new PlatformRow(check.PlatformCode, type, state, url, DeriveResultType(pageType, check.PlatformCode, url));
     }
 
-    // Platform codes are an Infrastructure concern (PlatformCodes), not referenceable from here —
-    // these two literals are YouTube's own, stable platform codes (see PlatformCodes.YouTube/
-    // YouTubeMusic).
-    private const string YouTubePlatformCode = "youtube";
-    private const string YouTubeMusicPlatformCode = "youtube-music";
+    internal const string YouTubePlatformCode = "youtube";
+    internal const string YouTubeMusicPlatformCode = "youtube-music";
 
-    // YouTube's D2 fallback (ADR 0018) links an unverified album's row to a verified track instead —
-    // detectable from the stored URL shape alone (/watch vs /playlist), no extra state needed.
     private static StreamingResultType? DeriveResultType(StreamingResultType pageType, string platformCode, Uri? url) =>
         pageType == StreamingResultType.Release
         && (platformCode == YouTubePlatformCode || platformCode == YouTubeMusicPlatformCode)

@@ -33,7 +33,9 @@ describe('ProviderLinkGroup', () => {
   });
 
   it('shows a found link as its URL and opens it in a new tab', () => {
-    render(<ProviderLinkGroup category="Listen" rows={[row({})]} pageType="Song" />);
+    render(
+      <ProviderLinkGroup category="Listen" rows={[row({})]} pageType="Song" />,
+    );
 
     const link = within(rowOf('YouTube')).getByRole('link', {
       name: 'https://www.youtube.com/watch?v=1',
@@ -138,13 +140,13 @@ describe('ProviderLinkGroup', () => {
       />,
     );
 
-    expect(
-      within(rowOf('YouTube Music')).queryByText('(track)'),
-    ).toBeNull();
+    expect(within(rowOf('YouTube Music')).queryByText('(track)')).toBeNull();
   });
 
   it('does not show a track label when resultType is absent', () => {
-    render(<ProviderLinkGroup category="Listen" rows={[row({})]} pageType="Album" />);
+    render(
+      <ProviderLinkGroup category="Listen" rows={[row({})]} pageType="Album" />,
+    );
 
     expect(within(rowOf('YouTube')).queryByText('(track)')).toBeNull();
   });

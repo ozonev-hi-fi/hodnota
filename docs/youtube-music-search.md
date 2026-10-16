@@ -1,6 +1,6 @@
 # YouTube and YouTube Music: finding the real album, not a pirate copy
 
-Status: **decided — see [decisions/0018](decisions/0018-youtube-music-authenticity-search.md).** Written 2026-10-01 as the starting point of a separate fix session; D1–D5 below were answered and E9/E10 run on 2026-10-11 on branch `feature/0018-youtube-music-authenticity`. This document stays as the supporting research; the decision itself lives in the ADR. Nothing more is fixed in branch `feature/0014-resolve-time-catalog-enrichment` than what section 14 lists — the authenticity model, song/album lookup changes, and search-page wiring described in section 10 are a separate, later implementation plan.
+Status: **decided — see [decisions/0018](decisions/0018-youtube-music-authenticity-search.md).** Written 2026-10-01 as the starting point of a separate fix session; D1–D5 below were answered and E9/E10 run on 2026-10-11 on branch `feature/0018-youtube-music-authenticity`. This document stays as the supporting research; the decision itself lives in the ADR. The fix is implemented on the same branch; see the ADR's addenda.
 
 Terms used: **Topic channel** = a channel YouTube makes by itself for an artist, named "Artist - Topic". **OLAK playlist** = the official YouTube Music album playlist, with an id that starts with `OLAK5uy_`. **InnerTube** = the internal API that the YouTube Music website and app use. **ToS** = terms of service.
 

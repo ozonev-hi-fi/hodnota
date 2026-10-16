@@ -14,9 +14,6 @@ public sealed class YouTubeApiClient(YouTubeService youTubeService) : IYouTubeAp
     public Task<IReadOnlyList<SearchResult>> SearchVideosAsync(string query, string? channelId, int? categoryId, int maxResults, CancellationToken cancellationToken) =>
         SearchAsync(query, "video", channelId, categoryId, maxResults, cancellationToken);
 
-    public Task<IReadOnlyList<SearchResult>> SearchPlaylistsAsync(string query, int maxResults, CancellationToken cancellationToken) =>
-        SearchAsync(query, "playlist", channelId: null, categoryId: null, maxResults, cancellationToken);
-
     public Task<IReadOnlyList<SearchResult>> SearchChannelsAsync(string query, int maxResults, CancellationToken cancellationToken) =>
         SearchAsync(query, "channel", channelId: null, categoryId: null, maxResults, cancellationToken);
 
@@ -65,6 +62,10 @@ public sealed class YouTubeApiClient(YouTubeService youTubeService) : IYouTubeAp
         var response = await ExecuteAsync(request.ExecuteAsync(cancellationToken), "search");
         return response.Items?.ToList() ?? [];
     }
+
+    internal static bool IsQuotaExceeded(StreamingProviderException exception) =>
+        exception.InnerException is GoogleApiException { Error.Errors: { } errors }
+        && errors.Any(error => error.Reason is "quotaExceeded" or "dailyLimitExceeded");
 
     private static async Task<T> ExecuteAsync<T>(Task<T> execution, string requestName)
     {

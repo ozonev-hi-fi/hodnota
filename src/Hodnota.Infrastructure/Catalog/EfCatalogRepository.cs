@@ -147,8 +147,6 @@ public sealed class EfCatalogRepository(ApplicationDbContext dbContext, TimeProv
 
         var links = await FetchProviderLinksAsync(page.TrackId, page.ReleaseId, cancellationToken);
         var artistName = await GetMainArtistNameAsync(page.TrackId, page.ReleaseId, cancellationToken);
-        // Only a Release request needs this (YouTube's channel disambiguation, ADR 0018 D2/E10) —
-        // a Track request has nothing of its own to compare a candidate channel's uploads against.
         var trackTitles = page.Release?.Tracks.Select(rt => rt.TitleOverride ?? rt.Track.Title).ToList();
 
         return new EnrichmentRequest(

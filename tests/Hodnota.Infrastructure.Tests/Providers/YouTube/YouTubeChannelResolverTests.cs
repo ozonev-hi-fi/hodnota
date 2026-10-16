@@ -1,5 +1,7 @@
 using AwesomeAssertions;
 
+using Google;
+using Google.Apis.Requests;
 using Google.Apis.YouTube.v3.Data;
 
 using Hodnota.Application.Catalog;
@@ -29,7 +31,7 @@ public class YouTubeChannelResolverTests
     {
         apiClient.GetUploadsPlaylistIdAsync(channelId, Arg.Any<CancellationToken>()).Returns(uploadsPlaylistId);
         apiClient.GetPlaylistItemsAsync(uploadsPlaylistId, Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns(uploadTitles.Select(Item).ToList());
+            .Returns([.. uploadTitles.Select(Item)]);
     }
 
     [Fact]
@@ -135,5 +137,40 @@ public class YouTubeChannelResolverTests
         var result = await resolver.ResolveTopicChannelAsync("Nostromo", ["Rude Awakening"], CancellationToken.None);
 
         result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task ResolveTopicChannelAsync_ImpostorUploadOnlyContainsAKnownShortTitle_IsNotPicked()
+    {
+        var apiClient = NewApiClient();
+        apiClient.SearchChannelsAsync("Metallica - Topic", Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns([Channel("UC-impostor", "Metallica - Topic"), Channel("UCGexNm_Kw4rdQjLxmpb2EKw", "Metallica - Topic")]);
+        SetUpChannel(apiClient, "UC-impostor", "UU-impostor", "Alone", "Someone Else");
+        SetUpChannel(apiClient, "UCGexNm_Kw4rdQjLxmpb2EKw", "UUGexNm_Kw4rdQjLxmpb2EKw", "One (Remastered)");
+        var resolver = new YouTubeChannelResolver(apiClient);
+
+        var result = await resolver.ResolveTopicChannelAsync("Metallica", ["One"], CancellationToken.None);
+
+        result.Should().Be("UCGexNm_Kw4rdQjLxmpb2EKw");
+    }
+
+    [Fact]
+    public async Task ResolveTopicChannelAsync_QuotaExceeded_ThrowsWithoutTryingTheNextCandidate()
+    {
+        var apiClient = NewApiClient();
+        apiClient.SearchChannelsAsync("Nostromo - Topic", Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns([Channel("UC-first", "Nostromo - Topic"), Channel("UCjbNuWiJ2t_hO5Yu8Eihi0w", "Nostromo - Topic")]);
+        var quotaError = new GoogleApiException("youtube", "Quota exceeded.")
+        {
+            Error = new RequestError { Errors = [new SingleError { Reason = "quotaExceeded" }] },
+        };
+        apiClient.GetUploadsPlaylistIdAsync("UC-first", Arg.Any<CancellationToken>())
+            .Returns(Task.FromException<string?>(new StreamingProviderException("YouTube channels request failed.", quotaError)));
+        var resolver = new YouTubeChannelResolver(apiClient);
+
+        var act = () => resolver.ResolveTopicChannelAsync("Nostromo", ["Rude Awakening"], CancellationToken.None);
+
+        await act.Should().ThrowAsync<StreamingProviderException>();
+        await apiClient.DidNotReceive().GetUploadsPlaylistIdAsync("UCjbNuWiJ2t_hO5Yu8Eihi0w", Arg.Any<CancellationToken>());
     }
 }

@@ -1,6 +1,7 @@
 using AwesomeAssertions;
 
 using Hodnota.Application.Catalog;
+using Hodnota.Infrastructure.Catalog;
 using Hodnota.Infrastructure.Providers.AppleMusic;
 using Hodnota.Infrastructure.Providers.Deezer;
 using Hodnota.Infrastructure.Providers.Discogs;
@@ -65,5 +66,13 @@ public class ProviderPlatformCodesTests
 
         provider.LinkPlatformCodes.Should().NotBeEmpty();
         seeded.Should().Contain(provider.LinkPlatformCodes, $"{provider.ProviderCode} produces links for these platforms");
+    }
+
+    // Application can't reference PlatformCodes, so SharePageService keeps its own copies.
+    [Fact]
+    public void SharePageServiceYouTubeCodes_MatchPlatformCodes()
+    {
+        SharePageService.YouTubePlatformCode.Should().Be(PlatformCodes.YouTube);
+        SharePageService.YouTubeMusicPlatformCode.Should().Be(PlatformCodes.YouTubeMusic);
     }
 }

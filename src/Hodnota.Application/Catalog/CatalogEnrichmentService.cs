@@ -74,8 +74,6 @@ public sealed class CatalogEnrichmentService(IEnumerable<IStreamingProvider> pro
             return [];
         }
 
-        // A result of the requested type is always accepted; a YouTube Track result is also accepted
-        // for a Release request — the verified-track fallback for an unverified album (ADR 0018 D2).
         bool AcceptableType(StreamingResultType resultType) => resultType == request.Type
             || (provider.ProviderCode == ProviderCodes.YouTube && request.Type == StreamingResultType.Release && resultType == StreamingResultType.Track);
 

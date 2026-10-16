@@ -6,8 +6,6 @@ public interface IYouTubeApiClient
 {
     Task<IReadOnlyList<SearchResult>> SearchVideosAsync(string query, string? channelId, int? categoryId, int maxResults, CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<SearchResult>> SearchPlaylistsAsync(string query, int maxResults, CancellationToken cancellationToken);
-
     Task<IReadOnlyList<SearchResult>> SearchChannelsAsync(string query, int maxResults, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<Video>> GetVideosAsync(IReadOnlyList<string> videoIds, CancellationToken cancellationToken);

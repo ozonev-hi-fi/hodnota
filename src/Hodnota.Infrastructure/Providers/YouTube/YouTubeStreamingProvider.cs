@@ -29,16 +29,12 @@ public sealed class YouTubeStreamingProvider(IYouTubeApiClient apiClient, YouTub
 
     public async Task<IReadOnlyList<StreamingSearchResult>> FindByNameAsync(string artistName, string name, StreamingResultType type, IReadOnlyList<string> knownTrackTitles, CancellationToken cancellationToken)
     {
-        var results = await SearchAsync($"{artistName} {name}", type, cancellationToken);
-        var matches = results.Where(result => result.Type == type && SearchResultNameMatcher.IsSameItem(result, artistName, name)).ToList();
-        if (matches.Count > 0 || type != StreamingResultType.Release)
+        if (type == StreamingResultType.Track)
         {
-            return matches;
+            var results = await SearchAsync($"{artistName} {name}", type, cancellationToken);
+            return [.. results.Where(result => result.Type == type && SearchResultNameMatcher.IsSameItem(result, artistName, name))];
         }
 
-        // No verifiable OLAK album playlist — fall back to a verified Topic track of the album
-        // (ADR 0018 D2), found by confirming the artist's Topic channel (E10) and searching inside
-        // it for the album title (E9).
         var channelId = await channelResolver.ResolveTopicChannelAsync(artistName, knownTrackTitles, cancellationToken);
         if (channelId is null)
         {
@@ -46,16 +42,23 @@ public sealed class YouTubeStreamingProvider(IYouTubeApiClient apiClient, YouTub
         }
 
         var channelItems = await apiClient.SearchVideosAsync(name, channelId, MusicCategoryId, MaxChannelVideoResults, cancellationToken);
-        var track = channelItems.Where(IsUsable).Where(YouTubeAuthenticity.HasIntrinsicAuthenticity).Select(ToSearchResult).FirstOrDefault();
+        var track = channelItems
+            .Where(IsUsable)
+            .Where(YouTubeAuthenticity.HasIntrinsicAuthenticity)
+            .Where(item => YouTubeTrackTitleMatcher.IsAnyKnownTrack(item.Snippet.Title, knownTrackTitles))
+            .Select(ToSearchResult)
+            .FirstOrDefault();
         return track is null ? [] : [track];
     }
 
     public async Task<IReadOnlyList<StreamingSearchResult>> SearchAsync(string query, StreamingResultType type, CancellationToken cancellationToken)
     {
-        var items = type == StreamingResultType.Track
-            ? await apiClient.SearchVideosAsync(query, channelId: null, categoryId: null, MaxResults, cancellationToken)
-            : await apiClient.SearchPlaylistsAsync(query, MaxResults, cancellationToken);
+        if (type != StreamingResultType.Track)
+        {
+            return [];
+        }
 
+        var items = await apiClient.SearchVideosAsync(query, channelId: null, categoryId: null, MaxResults, cancellationToken);
         return [.. items.Where(IsUsable).Where(YouTubeAuthenticity.HasIntrinsicAuthenticity).Select(ToSearchResult)];
     }
 

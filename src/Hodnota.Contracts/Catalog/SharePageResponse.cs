@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Text.Json.Serialization;
 
 namespace Hodnota.Contracts.Catalog;
@@ -22,9 +23,12 @@ public enum PlatformRowState
     Failed,
 }
 
-// ResultType is set only when it differs from the page's own type — YouTube's verified-track
-// fallback for an unverified album (ADR 0018 D2) is the only case today.
-public sealed record PlatformRowResponse(string Platform, PlatformType Type, PlatformRowState State, Uri? Url, CandidateType? ResultType = null);
+public sealed record PlatformRowResponse(
+    string Platform,
+    PlatformType Type,
+    PlatformRowState State,
+    Uri? Url,
+    [property: Description("The linked item's type, set only when it differs from the share page's own type.")] CandidateType? ResultType = null);
 
 public sealed record SharePageResponse(
     Guid Id,

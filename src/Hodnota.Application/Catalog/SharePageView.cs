@@ -1,3 +1,5 @@
+using System.ComponentModel;
+
 using Hodnota.Domain.Catalog;
 
 namespace Hodnota.Application.Catalog;
@@ -11,9 +13,12 @@ public enum PlatformRowState
     Failed,
 }
 
-// ResultType is set only when it differs from the page's own type — YouTube's verified-track
-// fallback for an unverified album (ADR 0018 D2) is the only case today.
-public sealed record PlatformRow(string PlatformCode, PlatformType PlatformType, PlatformRowState State, Uri? Url, StreamingResultType? ResultType = null);
+public sealed record PlatformRow(
+    string PlatformCode,
+    PlatformType PlatformType,
+    PlatformRowState State,
+    Uri? Url,
+    [property: Description("The linked item's type, set only when it differs from the share page's own type.")] StreamingResultType? ResultType = null);
 
 // Rows cover every platform of a running provider that supports the item's type, plus any platform
 // that already has a stored link. IsComplete: no row is still being checked.

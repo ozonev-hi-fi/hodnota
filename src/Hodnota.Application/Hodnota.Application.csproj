@@ -7,8 +7,10 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Hodnota.Application.Tests" />
-    <!-- So YouTubeChannelResolver (Hodnota.Infrastructure) can reuse SearchResultKey.Normalize
-         instead of duplicating title normalization for its own track-title overlap check. -->
+    <!-- So YouTubeTrackTitleMatcher (Hodnota.Infrastructure) can reuse SearchResultKey.Normalize
+         instead of duplicating title normalization. -->
     <InternalsVisibleTo Include="Hodnota.Infrastructure" />
+    <!-- So a test can check SharePageService's YouTube platform-code literals against PlatformCodes. -->
+    <InternalsVisibleTo Include="Hodnota.Infrastructure.Tests" />
   </ItemGroup>
 </Project>

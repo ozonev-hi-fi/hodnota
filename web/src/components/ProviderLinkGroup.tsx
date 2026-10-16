@@ -1,6 +1,6 @@
 import type { PlatformRow } from '../api/catalog.ts';
-import { platformLabel } from '../api/platforms.ts';
 import type { components } from '../api/generated/openapi-types.ts';
+import { platformLabel } from '../api/platforms.ts';
 
 type CandidateType = components['schemas']['CandidateType'];
 
@@ -18,9 +18,13 @@ function ProviderLink({ url }: { url: string }) {
   );
 }
 
-// A link whose resultType differs from the page's own type is YouTube's verified-track fallback
-// for an unverified album (ADR 0018 D2) — "labelled as a track, never the full album".
-function TrackLabel({ row, pageType }: { row: PlatformRow; pageType: CandidateType }) {
+function TrackLabel({
+  row,
+  pageType,
+}: {
+  row: PlatformRow;
+  pageType: CandidateType;
+}) {
   if (!row.resultType || row.resultType === pageType) {
     return null;
   }
@@ -28,7 +32,13 @@ function TrackLabel({ row, pageType }: { row: PlatformRow; pageType: CandidateTy
   return <span className="text-muted small"> (track)</span>;
 }
 
-function RowStatus({ row, pageType }: { row: PlatformRow; pageType: CandidateType }) {
+function RowStatus({
+  row,
+  pageType,
+}: {
+  row: PlatformRow;
+  pageType: CandidateType;
+}) {
   switch (row.state) {
     case 'Checking':
       return (
@@ -66,7 +76,11 @@ function RowStatus({ row, pageType }: { row: PlatformRow; pageType: CandidateTyp
   }
 }
 
-function ProviderLinkGroup({ category, rows, pageType }: ProviderLinkGroupProps) {
+function ProviderLinkGroup({
+  category,
+  rows,
+  pageType,
+}: ProviderLinkGroupProps) {
   if (rows.length === 0) {
     return null;
   }
