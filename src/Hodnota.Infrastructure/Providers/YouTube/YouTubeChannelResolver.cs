@@ -1,14 +1,28 @@
 using Hodnota.Application.Catalog;
 
+using Microsoft.Extensions.Caching.Memory;
+
 namespace Hodnota.Infrastructure.Providers.YouTube;
 
-public sealed class YouTubeChannelResolver(IYouTubeApiClient apiClient)
+public sealed class YouTubeChannelResolver(IYouTubeApiClient apiClient, IMemoryCache cache)
 {
     private const int MaxCandidates = 25;
     private const int SampleSize = 5;
 
+    // A found channel rarely changes, and re-finding it costs up to ~50 quota units per resolve
+    // (MaxCandidates search + per-candidate uploads-playlist lookups) — caching it avoids exhausting
+    // the 10,000-unit/day quota from a handful of distinct artists. A miss (null) is not cached: it
+    // can be a false negative from an unlucky knownTrackTitles sample, and should be free to retry.
+    private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(24);
+
     public async Task<string?> ResolveTopicChannelAsync(string artistName, IReadOnlyList<string> knownTrackTitles, CancellationToken cancellationToken)
     {
+        var cacheKey = $"{nameof(YouTubeChannelResolver)}:{artistName.Trim().ToLowerInvariant()}";
+        if (cache.TryGetValue(cacheKey, out string? cachedChannelId))
+        {
+            return cachedChannelId;
+        }
+
         var knownKeys = knownTrackTitles.Select(YouTubeTrackTitleMatcher.Key).Where(key => key.Length > 0).ToHashSet();
         if (knownKeys.Count == 0)
         {
@@ -26,6 +40,7 @@ public sealed class YouTubeChannelResolver(IYouTubeApiClient apiClient)
 
             if (await OverlapsKnownTracksAsync(channelId, knownKeys, cancellationToken))
             {
+                cache.Set(cacheKey, channelId, CacheTtl);
                 return channelId;
             }
         }

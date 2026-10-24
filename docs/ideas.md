@@ -224,3 +224,7 @@ Not a problem, just looking for a best way in case solo project will have contri
 The CSP was out of focus. Must be a part of the UI implementation stage.
 
 ---
+
+Move all processes like the db connection validation, validation of providers APIs credentials, etc. to the health check activities. The goal is faster boot of the application but without loosing track on important configurations and states - starts immideately, notify when ready.
+
+---

@@ -16,6 +16,7 @@ using Hodnota.Infrastructure.Providers.YouTube;
 
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -77,12 +78,24 @@ public static class DependencyInjection
         services.AddSingleton(serviceProvider =>
         {
             var apiKey = configuration[YouTubeConfiguration.ApiKeyConfigKey];
+            if (string.IsNullOrEmpty(apiKey))
+            {
+                throw new InvalidOperationException($"Missing required configuration value '{YouTubeConfiguration.ApiKeyConfigKey}'.");
+            }
 
-            return string.IsNullOrEmpty(apiKey)
-                ? throw new InvalidOperationException($"Missing required configuration value '{YouTubeConfiguration.ApiKeyConfigKey}'.")
-                : new YouTubeService(new BaseClientService.Initializer { ApiKey = apiKey, ApplicationName = "Hodnota" });
+            var service = new YouTubeService(new BaseClientService.Initializer { ApiKey = apiKey, ApplicationName = "Hodnota" });
+            // Unlike every other provider's HttpClient (AddHttpClient's explicit 10s, per ADR 0014),
+            // this client library has no timeout configuration of its own — it falls back to
+            // HttpClient's ~100s default, which would let one slow YouTube call block the whole
+            // multi-provider search far longer than any sibling provider's bound.
+            service.HttpClient.Timeout = TimeSpan.FromSeconds(10);
+            return service;
         });
-        services.AddSingleton<ISearchCandidateCache, MemorySearchCandidateCache>();
+        // Its own IMemoryCache instance, not the shared one AddMemoryCache() registers above: search
+        // candidates are many, short-lived, and unbounded, so they get their own SizeLimit instead of
+        // retrofitting Size onto every other cache entry that shares the default instance.
+        services.AddSingleton<ISearchCandidateCache>(_ => new MemorySearchCandidateCache(
+            new MemoryCache(new MemoryCacheOptions { SizeLimit = MemorySearchCandidateCache.MaxEntries })));
         services.AddSingleton<IYouTubeApiClient, YouTubeApiClient>();
         services.AddSingleton<YouTubeChannelResolver>();
         services.AddScoped<IStreamingProvider, YouTubeStreamingProvider>();

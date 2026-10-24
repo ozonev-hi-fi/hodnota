@@ -7,6 +7,8 @@ using Google.Apis.YouTube.v3.Data;
 using Hodnota.Application.Catalog;
 using Hodnota.Infrastructure.Providers.YouTube;
 
+using Microsoft.Extensions.Caching.Memory;
+
 using NSubstitute;
 
 namespace Hodnota.Infrastructure.Tests.Providers.YouTube;
@@ -27,6 +29,9 @@ public class YouTubeChannelResolverTests
 
     private static IYouTubeApiClient NewApiClient() => Substitute.For<IYouTubeApiClient>();
 
+    private static YouTubeChannelResolver NewResolver(IYouTubeApiClient apiClient) =>
+        new(apiClient, new MemoryCache(new MemoryCacheOptions()));
+
     private static void SetUpChannel(IYouTubeApiClient apiClient, string channelId, string uploadsPlaylistId, params string[] uploadTitles)
     {
         apiClient.GetUploadsPlaylistIdAsync(channelId, Arg.Any<CancellationToken>()).Returns(uploadsPlaylistId);
@@ -38,7 +43,7 @@ public class YouTubeChannelResolverTests
     public async Task ResolveTopicChannelAsync_NoKnownTrackTitles_ReturnsNullWithoutCallingTheApi()
     {
         var apiClient = NewApiClient();
-        var resolver = new YouTubeChannelResolver(apiClient);
+        var resolver = NewResolver(apiClient);
 
         var result = await resolver.ResolveTopicChannelAsync("Nostromo", [], CancellationToken.None);
 
@@ -54,7 +59,7 @@ public class YouTubeChannelResolverTests
             .Returns([Channel("UCjbNuWiJ2t_hO5Yu8Eihi0w", "Nostromo - Topic")]);
         SetUpChannel(apiClient, "UCjbNuWiJ2t_hO5Yu8Eihi0w", "UUjbNuWiJ2t_hO5Yu8Eihi0w",
             "Selfish Blues (Stripped)", "End's Eve (Stripped)", "Rude Awakening (Stripped)");
-        var resolver = new YouTubeChannelResolver(apiClient);
+        var resolver = NewResolver(apiClient);
 
         var result = await resolver.ResolveTopicChannelAsync("Nostromo", ["Rude Awakening", "Turned Black"], CancellationToken.None);
 
@@ -70,7 +75,7 @@ public class YouTubeChannelResolverTests
             .Returns([Channel("UC-synthpop-nostromo", "Nostromo - Topic"), Channel("UCjbNuWiJ2t_hO5Yu8Eihi0w", "Nostromo - Topic")]);
         SetUpChannel(apiClient, "UC-synthpop-nostromo", "UU-synthpop-nostromo", "Unrelated Synth Track", "Another Unrelated Track");
         SetUpChannel(apiClient, "UCjbNuWiJ2t_hO5Yu8Eihi0w", "UUjbNuWiJ2t_hO5Yu8Eihi0w", "Rude Awakening (Stripped)");
-        var resolver = new YouTubeChannelResolver(apiClient);
+        var resolver = NewResolver(apiClient);
 
         var result = await resolver.ResolveTopicChannelAsync("Nostromo", ["Rude Awakening"], CancellationToken.None);
 
@@ -88,7 +93,7 @@ public class YouTubeChannelResolverTests
             .Returns([Channel("UC-kirk-hammett", "Kirk Hammett - Topic"), Channel("UCGexNm_Kw4rdQjLxmpb2EKw", "Metallica - Topic")]);
         SetUpChannel(apiClient, "UC-kirk-hammett", "UU-kirk-hammett", "Portals (Kirk Hammett solo track)");
         SetUpChannel(apiClient, "UCGexNm_Kw4rdQjLxmpb2EKw", "UUGexNm_Kw4rdQjLxmpb2EKw", "King Nothing", "Until It Sleeps");
-        var resolver = new YouTubeChannelResolver(apiClient);
+        var resolver = NewResolver(apiClient);
 
         var result = await resolver.ResolveTopicChannelAsync("Metallica", ["King Nothing", "Until It Sleeps"], CancellationToken.None);
 
@@ -101,7 +106,7 @@ public class YouTubeChannelResolverTests
         var apiClient = NewApiClient();
         apiClient.SearchChannelsAsync("Metallica - Topic", Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns([Channel("UC-plain-metallica", "Metallica")]);
-        var resolver = new YouTubeChannelResolver(apiClient);
+        var resolver = NewResolver(apiClient);
 
         var result = await resolver.ResolveTopicChannelAsync("Metallica", ["King Nothing"], CancellationToken.None);
 
@@ -118,7 +123,7 @@ public class YouTubeChannelResolverTests
         apiClient.GetUploadsPlaylistIdAsync("UC-broken", Arg.Any<CancellationToken>())
             .Returns(Task.FromException<string?>(new StreamingProviderException("YouTube channels request failed.", new InvalidOperationException())));
         SetUpChannel(apiClient, "UCjbNuWiJ2t_hO5Yu8Eihi0w", "UUjbNuWiJ2t_hO5Yu8Eihi0w", "Rude Awakening (Stripped)");
-        var resolver = new YouTubeChannelResolver(apiClient);
+        var resolver = NewResolver(apiClient);
 
         var result = await resolver.ResolveTopicChannelAsync("Nostromo", ["Rude Awakening"], CancellationToken.None);
 
@@ -132,7 +137,7 @@ public class YouTubeChannelResolverTests
         apiClient.SearchChannelsAsync("Nostromo - Topic", Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns([Channel("UC-unrelated", "Nostromo - Topic")]);
         SetUpChannel(apiClient, "UC-unrelated", "UU-unrelated", "Completely Unrelated Song");
-        var resolver = new YouTubeChannelResolver(apiClient);
+        var resolver = NewResolver(apiClient);
 
         var result = await resolver.ResolveTopicChannelAsync("Nostromo", ["Rude Awakening"], CancellationToken.None);
 
@@ -147,7 +152,7 @@ public class YouTubeChannelResolverTests
             .Returns([Channel("UC-impostor", "Metallica - Topic"), Channel("UCGexNm_Kw4rdQjLxmpb2EKw", "Metallica - Topic")]);
         SetUpChannel(apiClient, "UC-impostor", "UU-impostor", "Alone", "Someone Else");
         SetUpChannel(apiClient, "UCGexNm_Kw4rdQjLxmpb2EKw", "UUGexNm_Kw4rdQjLxmpb2EKw", "One (Remastered)");
-        var resolver = new YouTubeChannelResolver(apiClient);
+        var resolver = NewResolver(apiClient);
 
         var result = await resolver.ResolveTopicChannelAsync("Metallica", ["One"], CancellationToken.None);
 
@@ -166,7 +171,7 @@ public class YouTubeChannelResolverTests
         };
         apiClient.GetUploadsPlaylistIdAsync("UC-first", Arg.Any<CancellationToken>())
             .Returns(Task.FromException<string?>(new StreamingProviderException("YouTube channels request failed.", quotaError)));
-        var resolver = new YouTubeChannelResolver(apiClient);
+        var resolver = NewResolver(apiClient);
 
         var act = () => resolver.ResolveTopicChannelAsync("Nostromo", ["Rude Awakening"], CancellationToken.None);
 

@@ -102,24 +102,43 @@ public class DiscogsStreamingProviderLookupTests
     [Fact]
     public async Task LookupAsync_ResultWithAnotherBarcode_IsIgnored()
     {
+        // Neither queried barcode form matches, so both are tried.
         var (provider, handler) = NewProvider();
+        handler.Enqueue(Ok(Release(20, 10, "5099902988085")));
         handler.Enqueue(Ok(Release(20, 10, "5099902988085")));
 
         var results = await provider.LookupAsync(Key("724385522925", "0724385522925"), CancellationToken.None);
 
         results.Should().BeEmpty();
+        handler.Requests.Should().HaveCount(2);
     }
 
     [Fact]
-    public async Task LookupAsync_NothingFound_AsksOnlyOnce()
+    public async Task LookupAsync_NothingFound_TriesEveryBarcodeFormThenGivesUp()
     {
         var (provider, handler) = NewProvider();
+        handler.Enqueue(Ok());
         handler.Enqueue(Ok());
 
         var results = await provider.LookupAsync(Key("724385522925", "0724385522925"), CancellationToken.None);
 
         results.Should().BeEmpty();
-        handler.Requests.Should().ContainSingle();
+        handler.Requests.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task LookupAsync_FirstBarcodeFormFindsNothing_TriesTheNextForm()
+    {
+        var (provider, handler) = NewProvider();
+        handler.Enqueue(Ok());
+        handler.Enqueue(Ok(Release(20, masterId: null, "0724385522925")));
+
+        var results = await provider.LookupAsync(Key("724385522925", "0724385522925"), CancellationToken.None);
+
+        results.Should().ContainSingle();
+        handler.Requests.Should().HaveCount(2);
+        QueryHelpers.ParseQuery(handler.Requests[0].RequestUri!.Query)["barcode"].ToString().Should().Be("724385522925");
+        QueryHelpers.ParseQuery(handler.Requests[1].RequestUri!.Query)["barcode"].ToString().Should().Be("0724385522925");
     }
 
     [Fact]

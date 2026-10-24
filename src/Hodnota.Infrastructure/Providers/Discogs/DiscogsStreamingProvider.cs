@@ -30,15 +30,27 @@ public sealed partial class DiscogsStreamingProvider(DiscogsApiClient apiClient)
             return [];
         }
 
-        var response = await apiClient.LookupByBarcodeAsync(key.Codes[0], cancellationToken);
+        // Each digit-length variant (StreamingLookupKey.Codes) is tried as the search term in turn:
+        // Discogs' barcode search can miss a release indexed under a different leading-zero form, same
+        // as Tidal's exact-match filter.
+        foreach (var code in key.Codes)
+        {
+            var response = await apiClient.LookupByBarcodeAsync(code, cancellationToken);
 
-        var matches = (response.Results ?? [])
-            .Where(result => result.Id.HasValue && !string.IsNullOrWhiteSpace(result.Title) && result.Type == ReleaseResultType)
-            .Where(result => HasBarcode(result, key))
-            .OrderBy(result => HasMaster(result) ? 0 : 1)
-            .Take(MaxResults);
+            var matches = (response.Results ?? [])
+                .Where(result => result.Id.HasValue && !string.IsNullOrWhiteSpace(result.Title) && result.Type == ReleaseResultType)
+                .Where(result => HasBarcode(result, key))
+                .OrderBy(result => HasMaster(result) ? 0 : 1)
+                .Take(MaxResults)
+                .ToList();
 
-        return [.. matches.SelectMany(ToLookupResults)];
+            if (matches.Count > 0)
+            {
+                return [.. matches.SelectMany(ToLookupResults)];
+            }
+        }
+
+        return [];
     }
 
     // Barcodes are typed in as printed, with spaces and dashes, next to non-barcode text.

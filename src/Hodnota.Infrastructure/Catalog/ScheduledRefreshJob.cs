@@ -14,6 +14,7 @@ namespace Hodnota.Infrastructure.Catalog;
 public sealed class ScheduledRefreshJob(
     IServiceScopeFactory scopeFactory,
     IRefreshSettingsCache settingsCache,
+    IEnrichmentQueue queue,
     ILogger<ScheduledRefreshJob> logger) : IJob
 {
     private const int BatchSize = 50;
@@ -58,7 +59,17 @@ public sealed class ScheduledRefreshJob(
 
         foreach (var page in due.GroupBy(candidate => candidate.SharePageId))
         {
-            var providers = page.Select(candidate => providersByPlatformCode[candidate.PlatformCode]).Distinct().ToList();
+            // Skip a provider EnrichmentWorker is already checking for this page — otherwise this
+            // sweep's save can race that worker job's save for the same entity+platform, overwriting a
+            // just-saved genuine match with this sweep's stale-by-comparison result.
+            var providers = page.Select(candidate => providersByPlatformCode[candidate.PlatformCode]).Distinct()
+                .Where(provider => !queue.IsActive(page.Key, provider.ProviderCode))
+                .ToList();
+            if (providers.Count == 0)
+            {
+                continue;
+            }
+
             await RefreshSharePageAsync(page.Key, providers, cancellationToken);
         }
     }

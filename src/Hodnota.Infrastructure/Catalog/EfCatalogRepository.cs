@@ -34,11 +34,29 @@ public sealed class EfCatalogRepository(ApplicationDbContext dbContext, TimeProv
             {
                 dbContext.ChangeTracker.Clear();
             }
+            // Without EnableRetryOnFailure, a deadlock (40P01) is not always wrapped directly in a
+            // DbUpdateException — it can surface one level further out as an InvalidOperationException
+            // wrapping that DbUpdateException. IsDeadlock walks the whole InnerException chain so
+            // either shape is caught.
+            catch (InvalidOperationException ex) when (attempt < 2 && IsDeadlock(ex))
+            {
+                dbContext.ChangeTracker.Clear();
+            }
         }
     }
 
-    internal static bool IsDeadlock(DbUpdateException ex) =>
-        ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.DeadlockDetected };
+    internal static bool IsDeadlock(Exception? ex)
+    {
+        for (var current = ex; current is not null; current = current.InnerException)
+        {
+            if (current is PostgresException { SqlState: PostgresErrorCodes.DeadlockDetected })
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     internal static bool IsProviderLinkExternalIdConflict(DbUpdateException ex) => ex.InnerException switch
     {
@@ -160,6 +178,29 @@ public sealed class EfCatalogRepository(ApplicationDbContext dbContext, TimeProv
     }
 
     public async Task<IReadOnlyList<PlatformCheckResult>> SaveEnrichmentAsync(Guid sharePageId, ProviderEnrichment enrichment, CancellationToken cancellationToken)
+    {
+        // A deadlock here is transient and nothing was actually persisted by either side, so redoing
+        // the whole read-then-write from scratch (not just SaveChangesAsync) is safe, same as
+        // ResolveSharePageAsync's retry above. A real conflict (someone else's save already won) still
+        // rethrows below instead of retrying.
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                return await SaveEnrichmentCoreAsync(sharePageId, enrichment, cancellationToken);
+            }
+            catch (DbUpdateException ex) when (attempt < 2 && IsDeadlock(ex))
+            {
+                dbContext.ChangeTracker.Clear();
+            }
+            catch (InvalidOperationException ex) when (attempt < 2 && IsDeadlock(ex))
+            {
+                dbContext.ChangeTracker.Clear();
+            }
+        }
+    }
+
+    private async Task<IReadOnlyList<PlatformCheckResult>> SaveEnrichmentCoreAsync(Guid sharePageId, ProviderEnrichment enrichment, CancellationToken cancellationToken)
     {
         var target = await FindTargetAsync(sharePageId, cancellationToken);
         if (target is null)

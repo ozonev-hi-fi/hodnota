@@ -107,7 +107,7 @@ public sealed class SpotifyStreamingProvider(SpotifyApiClient apiClient) : IStre
             .FirstOrDefault();
 
         var chosen = atLeastPreferred ?? images.OrderByDescending(image => image.Width ?? 0).First();
-        return new Uri(chosen.Url);
+        return Uri.TryCreate(chosen.Url, UriKind.Absolute, out var uri) ? uri : null;
     }
 
     internal static ReleaseType ToReleaseType(string? albumType) => albumType switch
@@ -118,7 +118,7 @@ public sealed class SpotifyStreamingProvider(SpotifyApiClient apiClient) : IStre
     };
 
     private static Uri BuildUrl(SpotifyExternalUrls? externalUrls, string entityKind, string externalId) =>
-        externalUrls?.Spotify is { Length: > 0 } url
-            ? new Uri(url)
+        externalUrls?.Spotify is { Length: > 0 } url && Uri.TryCreate(url, UriKind.Absolute, out var uri)
+            ? uri
             : new Uri($"https://open.spotify.com/{entityKind}/{externalId}");
 }

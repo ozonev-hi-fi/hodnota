@@ -31,7 +31,11 @@ public class ScheduledRefreshJobTests
 
     private static EnrichmentRequest Request() => new(StreamingResultType.Track, "Song", "Artist", "USRC17607839", null, []);
 
-    private static (ScheduledRefreshJob Job, ICatalogRepository Repository) NewJob(IRefreshSettingsCache settingsCache, params IStreamingProvider[] providers)
+    private static (ScheduledRefreshJob Job, ICatalogRepository Repository) NewJob(IRefreshSettingsCache settingsCache, params IStreamingProvider[] providers) =>
+        NewJob(settingsCache, NothingActiveQueue(), providers);
+
+    private static (ScheduledRefreshJob Job, ICatalogRepository Repository) NewJob(
+        IRefreshSettingsCache settingsCache, IEnrichmentQueue queue, params IStreamingProvider[] providers)
     {
         var repository = Substitute.For<ICatalogRepository>();
         var services = new ServiceCollection();
@@ -45,8 +49,16 @@ public class ScheduledRefreshJobTests
         services.AddScoped<CatalogEnrichmentService>();
         var serviceProvider = services.BuildServiceProvider();
 
-        var job = new ScheduledRefreshJob(serviceProvider.GetRequiredService<IServiceScopeFactory>(), settingsCache, NullLogger<ScheduledRefreshJob>.Instance);
+        var job = new ScheduledRefreshJob(serviceProvider.GetRequiredService<IServiceScopeFactory>(), settingsCache, queue, NullLogger<ScheduledRefreshJob>.Instance);
         return (job, repository);
+    }
+
+    // Matches every test below that doesn't care about the EnrichmentWorker-coordination path.
+    private static IEnrichmentQueue NothingActiveQueue()
+    {
+        var queue = Substitute.For<IEnrichmentQueue>();
+        queue.IsActive(Arg.Any<Guid>(), Arg.Any<string>()).Returns(false);
+        return queue;
     }
 
     private static IRefreshSettingsCache Settings(int notFoundDays = 7, int foundDays = 90)
@@ -169,6 +181,22 @@ public class ScheduledRefreshJobTests
             SharePageId,
             Arg.Is<ProviderEnrichment>(e => e.ProviderCode == ProviderCodes.Tidal && e.Outcome == LookupOutcome.Failed),
             Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ProviderAlreadyActiveInTheEnrichmentQueue_IsSkipped()
+    {
+        var provider = NewProvider(ProviderCodes.Tidal);
+        var queue = Substitute.For<IEnrichmentQueue>();
+        queue.IsActive(SharePageId, ProviderCodes.Tidal).Returns(true);
+        var (job, repository) = NewJob(Settings(), queue, provider);
+        repository.GetDueProviderChecksAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<TimeSpan>(), Arg.Any<TimeSpan>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns([new DueRefreshCandidate(SharePageId, PlatformCodes.Tidal)]);
+
+        await job.Execute(Substitute.For<IJobExecutionContext>());
+
+        await repository.DidNotReceive().GetEnrichmentRequestAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await repository.DidNotReceive().SaveEnrichmentAsync(Arg.Any<Guid>(), Arg.Any<ProviderEnrichment>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

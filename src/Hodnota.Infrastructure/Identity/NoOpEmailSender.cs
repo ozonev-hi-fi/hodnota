@@ -32,11 +32,17 @@ public sealed partial class NoOpEmailSender(ILogger<NoOpEmailSender> logger, ICo
     private string ToWebAppConfirmationLink(string apiConfirmationLink)
     {
         var query = QueryHelpers.ParseQuery(new Uri(apiConfirmationLink).Query);
-        var parameters = new Dictionary<string, string?>
+        var parameters = new Dictionary<string, string?>();
+        if (query.TryGetValue("userId", out var userId))
         {
-            ["userId"] = query["userId"].ToString(),
-            ["code"] = query["code"].ToString(),
-        };
+            parameters["userId"] = userId.ToString();
+        }
+
+        if (query.TryGetValue("code", out var code))
+        {
+            parameters["code"] = code.ToString();
+        }
+
         if (query.TryGetValue("changedEmail", out var changedEmail))
         {
             parameters["changedEmail"] = changedEmail.ToString();

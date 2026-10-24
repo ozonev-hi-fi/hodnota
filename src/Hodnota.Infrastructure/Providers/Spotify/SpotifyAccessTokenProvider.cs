@@ -14,6 +14,10 @@ public sealed class SpotifyAccessTokenProvider(
 {
     private static readonly TimeSpan ExpiryMargin = TimeSpan.FromSeconds(60);
 
+    // Used only when the token response carries no usable expires_in, so a missing value does not
+    // make every search request a new token.
+    private const int DefaultLifetimeSeconds = 3600;
+
     private readonly SemaphoreSlim _gate = new(1, 1);
     private string? _accessToken;
     private DateTimeOffset _expiresAtUtc = DateTimeOffset.MinValue;
@@ -80,7 +84,7 @@ public sealed class SpotifyAccessTokenProvider(
                 var body = await response.Content.ReadFromJsonAsync<SpotifyTokenResponse>(cancellationToken);
                 return body is null || string.IsNullOrEmpty(body.AccessToken)
                     ? throw new StreamingProviderException("Spotify token response was empty.", new InvalidOperationException("Missing access_token."))
-                    : (body.AccessToken, body.ExpiresIn);
+                    : (body.AccessToken, body.ExpiresIn > 0 ? body.ExpiresIn : DefaultLifetimeSeconds);
             }
             catch (JsonException ex)
             {

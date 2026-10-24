@@ -98,7 +98,7 @@ public sealed class QobuzStreamingProvider(QobuzApiClient apiClient) : IStreamin
             : image?.Thumbnail is { Length: > 0 } thumbnail ? thumbnail
             : null;
 
-        return url is null ? null : new Uri(url);
+        return url is not null && Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri : null;
     }
 
     internal static ReleaseType ToReleaseType(string? releaseType) => releaseType switch

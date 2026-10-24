@@ -115,23 +115,41 @@ public class TidalStreamingProviderLookupTests
     }
 
     [Fact]
+    public async Task LookupAsync_Release_FirstBarcodeFormFindsNothing_TriesTheNextForm()
+    {
+        // Tidal's filter is an exact match: the 12-digit form finds nothing, but the release is
+        // actually indexed under its 13-digit (leading-zero) form.
+        var (provider, handler) = NewProvider("""{"data":[],"included":[]}""", Document(AlbumData("7", "0602537817016"), ArtistJson));
+
+        var results = await provider.LookupAsync(ReleaseKey("602537817016", "0602537817016"), CancellationToken.None);
+
+        results.Select(r => r.Links.Single().ExternalId).Should().Equal("7");
+        handler.Requests.Should().HaveCount(2);
+        handler.Requests[0].RequestUri!.Query.Should().Contain("filter%5BbarcodeId%5D=602537817016");
+        handler.Requests[1].RequestUri!.Query.Should().Contain("filter%5BbarcodeId%5D=0602537817016");
+    }
+
+    [Fact]
     public async Task LookupAsync_Release_ReturnedAlbumWithAnotherBarcode_IsIgnored()
     {
-        var (provider, _) = NewProvider(Document(AlbumData("8", "5099902988085")));
+        // Neither queried barcode form matches, so both are tried.
+        var (provider, handler) = NewProvider(Document(AlbumData("8", "5099902988085")), Document(AlbumData("8", "5099902988085")));
 
         var results = await provider.LookupAsync(ReleaseKey("602537817016", "0602537817016"), CancellationToken.None);
 
         results.Should().BeEmpty();
+        handler.Requests.Should().HaveCount(2);
     }
 
     [Fact]
     public async Task LookupAsync_NothingFound_ReturnsEmpty()
     {
-        var (provider, _) = NewProvider("""{"data":[],"included":[]}""");
+        var (provider, handler) = NewProvider("""{"data":[],"included":[]}""", """{"data":[],"included":[]}""");
 
         var results = await provider.LookupAsync(ReleaseKey("602537817016", "0602537817016"), CancellationToken.None);
 
         results.Should().BeEmpty();
+        handler.Requests.Should().HaveCount(2);
     }
 
     [Fact]

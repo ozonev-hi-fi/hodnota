@@ -8,7 +8,8 @@ public class YouTubeTrackTitleMatcherTests
 {
     [Theory]
     [InlineData("Rude Awakening (Stripped)", "Rude Awakening", true)]
-    [InlineData("Until It Sleeps - Live", "Until It Sleeps", true)]
+    [InlineData("Until It Sleeps - Live", "Until It Sleeps", false)]
+    [InlineData("Nothing Else Matters - Remix", "Nothing Else Matters", false)]
     [InlineData("King Nothing (Rough Mix) [Remastered]", "King Nothing", true)]
     [InlineData("One (Remastered)", "One", true)]
     [InlineData("Ain’t My Bitch", "Ain't My Bitch", true)]

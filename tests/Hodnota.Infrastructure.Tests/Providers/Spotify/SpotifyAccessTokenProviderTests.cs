@@ -75,6 +75,29 @@ public class SpotifyAccessTokenProviderTests
     }
 
     [Fact]
+    public async Task GetTokenAsync_ResponseWithoutLifetime_StillCachesTheToken()
+    {
+        var (provider, handler, _) = NewProvider();
+        handler.Enqueue(TokenResponse(expiresIn: 0));
+
+        await provider.GetTokenAsync(CancellationToken.None);
+        await provider.GetTokenAsync(CancellationToken.None);
+
+        handler.Requests.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task GetTokenAsync_EmptyAccessToken_ThrowsStreamingProviderException()
+    {
+        var (provider, handler, _) = NewProvider();
+        handler.Enqueue(TokenResponse(accessToken: ""));
+
+        var act = () => provider.GetTokenAsync(CancellationToken.None);
+
+        await act.Should().ThrowAsync<StreamingProviderException>();
+    }
+
+    [Fact]
     public async Task GetTokenAsync_ConcurrentCallers_RequestsTheTokenOnlyOnce()
     {
         var (provider, handler, _) = NewProvider();

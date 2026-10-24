@@ -3,6 +3,16 @@ import { Link } from 'react-router';
 import { ApiError, userFacingMessage } from '../api/errors.ts';
 import { useAuth } from '../auth/AuthContext.tsx';
 
+// ASP.NET Identity's MapIdentityApi login endpoint returns one of these exact words as the
+// ProblemDetails detail on failure (SignInResult.ToString()). Anything else (a future addition,
+// e.g. RequiresTwoFactor) falls back to the generic message below rather than showing the raw word.
+const LOGIN_FAILURE_MESSAGES: Record<string, string> = {
+  NotAllowed:
+    'Please confirm your email address before logging in — check your email for the confirmation link.',
+  LockedOut: 'Too many failed attempts — your account is temporarily locked. Please try again later.',
+  Failed: 'Incorrect email or password.',
+};
+
 function LoginPage() {
   const { login } = useAuth();
   const [email, setEmail] = useState('');
@@ -17,13 +27,8 @@ function LoginPage() {
     try {
       await login(email, password);
     } catch (err) {
-      // ASP.NET Identity returns this exact string for "credentials were correct, but the
-      // account isn't allowed to sign in yet" — distinguishable from a plain wrong-password
-      // failure, so it's worth a specific, actionable message instead of a generic one.
-      if (err instanceof ApiError && err.message === 'NotAllowed') {
-        setError(
-          'Please confirm your email address before logging in — check your email for the confirmation link.',
-        );
+      if (err instanceof ApiError && err.message in LOGIN_FAILURE_MESSAGES) {
+        setError(LOGIN_FAILURE_MESSAGES[err.message]);
       } else {
         setError(userFacingMessage(err, 'Login failed.'));
       }

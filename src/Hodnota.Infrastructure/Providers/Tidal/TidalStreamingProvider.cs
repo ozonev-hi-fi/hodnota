@@ -28,17 +28,29 @@ public sealed class TidalStreamingProvider(TidalApiClient apiClient) : IStreamin
     public async Task<IReadOnlyList<StreamingSearchResult>> LookupAsync(StreamingLookupKey key, CancellationToken cancellationToken)
     {
         var isTrack = key.Type == StreamingResultType.Track;
-        var document = await apiClient.LookupAsync(key.Codes[0], key.Type, cancellationToken);
-        var included = IndexIncluded(document.Included);
 
-        return
-        [
-            .. (document.Data ?? [])
+        // Track lookups have one code (the ISRC). Release lookups can have several barcode-digit-length
+        // variants (StreamingLookupKey.Codes) — Tidal's filter is an exact match, so each is tried in
+        // turn until one returns a usable match, same as Deezer/Spotify's own barcode lookups.
+        foreach (var code in key.Codes)
+        {
+            var document = await apiClient.LookupAsync(code, key.Type, cancellationToken);
+            var included = IndexIncluded(document.Included);
+
+            var matches = (document.Data ?? [])
                 .Where(IsUsable)
                 .Where(resource => MatchesKey(resource, key))
                 .Take(MaxResults)
-                .Select(resource => isTrack ? ToTrackResult(resource, included) : ToAlbumResult(resource, included)),
-        ];
+                .Select(resource => isTrack ? ToTrackResult(resource, included) : ToAlbumResult(resource, included))
+                .ToList();
+
+            if (matches.Count > 0)
+            {
+                return matches;
+            }
+        }
+
+        return [];
     }
 
     internal static bool MatchesKey(TidalResource resource, StreamingLookupKey key) => key.Type == StreamingResultType.Track

@@ -26,6 +26,7 @@ function SearchPage() {
   const [results, setResults] = useState<SearchCandidate[]>([]);
   const [searchToken, setSearchToken] = useState(0);
   const [searching, setSearching] = useState(false);
+  const [activatingId, setActivatingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -53,6 +54,13 @@ function SearchPage() {
   }
 
   async function handleActivate(candidate: SearchCandidate) {
+    // Without this, two quick clicks on different results both resolve and navigate — whichever
+    // finishes last wins, which can be the stale one. Ignore a second click while one is in flight.
+    if (activatingId !== null) {
+      return;
+    }
+
+    setActivatingId(candidate.id);
     setError(null);
     try {
       const sharePage = await resolveCatalog(candidate.id);
@@ -64,6 +72,8 @@ function SearchPage() {
       } else {
         setError(userFacingMessage(err, 'Could not open this result.'));
       }
+    } finally {
+      setActivatingId(null);
     }
   }
 
